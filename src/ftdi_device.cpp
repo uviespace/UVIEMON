@@ -71,6 +71,26 @@ FT_STATUS open_device(DWORD device_index, int cpu_type)
 		return ftStatus;
 	}
 
+	// Try to autodetect CPU type
+	if (device.cpu_type == -1) {
+		printf("Autodetecting CPU...");
+		DWORD cpu = amba_pnp_device(ioread32(AHB_PNP));
+
+		for(int i = 0; i < KNOWN_CPUS; i++) {
+			if (cpu == CPU_MAP[i][0]) {
+				device.cpu_type = CPU_MAP[i][1];
+				printf("%s CPU found!\n", CPU_NAMES[device.cpu_type]);
+				break;
+			}
+		}
+
+		if (device.cpu_type == -1) {
+			printf("Unknown cpu type: %03x ... Try to explicitly indicate a cpu with -cpu_type\n", cpu);
+			exit(-1);
+		}
+		
+	}
+
 	// Move this to another step?
 	init_core_1(); // Initialize core 1 (this will run all the programs)
 	//_initCore2();  // Initialize core 2 (this will be idle)

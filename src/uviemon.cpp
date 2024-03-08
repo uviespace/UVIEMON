@@ -87,6 +87,7 @@ void showHelp()
 	printf("\t -help: \t This list of all available commands\n");
 	printf("\t -info: \t Version numbers and driver info\n");
 	printf("\t -list: \t List all available FTDI devices\n");
+	printf("\t -cpu_tye <num>: \t 0 for LEON 3 and 1 for LEON4 autodetection used of omitted \n");
 	printf("\t -jtag <num>: \t Open console with jtag device\n\n");
 }
 
@@ -110,7 +111,7 @@ int main(int argc, char *argv[])
 	}
 
 	int i = 1;
-	int cpu_type = 0;
+	int cpu_type = -1;
 	int device_index = 0;
 
 	while(i < argc) {

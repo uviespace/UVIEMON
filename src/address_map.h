@@ -18,4 +18,26 @@ const uint32_t ADDRESSES[SUPPORTED_CPUS][DEFINED_ADDRESSES] = {
 	{ 0x40000000, 0xFF900000, 0xE0000000, 0xFF904010 }
 };
 
+
+#define AHB_PNP 0xFFFFF000
+
+#define DEV_GAISLER_LEON3        0x003
+#define DEV_GAISLER_LEON3DSU     0x004
+#define DEV_GAISLER_LEON4        0x048
+#define DEV_GAISLER_LEON4DSU     0x049
+#define DEV_GAISLER_LEON3FT      0x053
+#define KNOWN_CPUS               5
+
+const uint32_t CPU_MAP[KNOWN_CPUS][2] = {
+	{ DEV_GAISLER_LEON3, 0 },
+	{ DEV_GAISLER_LEON3DSU, 0 },
+	{ DEV_GAISLER_LEON4, 1 },
+	{ DEV_GAISLER_LEON4DSU, 1 },
+	{ DEV_GAISLER_LEON3FT, 0 }
+};
+
+extern const char *CPU_NAMES[];
+
+#define amba_pnp_device(id)  (((id) >> 12) & 0xfff)
+
 #endif
