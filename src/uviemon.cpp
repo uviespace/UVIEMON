@@ -39,9 +39,11 @@ void console()
 		
 		raw_input = readline("uviemon> "); // Read input from the user
 
+		if (!raw_input)
+			break;
+
 		if (raw_input && *raw_input)
 			add_history(raw_input);
-
 
 		parse_result = parse_input(raw_input);
 		free(raw_input);

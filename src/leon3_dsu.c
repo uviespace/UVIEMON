@@ -40,6 +40,7 @@
  */
 
 #include <stddef.h>	// size_t
+#include <stdlib.h> // malloc, free
 #include "leon3_dsu.h"
 
 #include "ftdi_device.hpp"
@@ -917,4 +918,67 @@ void dsu_set_reg_fp(uint32_t cpu, uint32_t cwp, uint32_t val)
 
 	if (reg)
 		iowrite32((uint32_t) reg, val);
+}
+
+
+
+/**
+ * @brief get the last line_count lines from the instruction trace buffer
+ *
+ * @param cpu the cpu number
+ * @param buffer the buffer to write the lines to
+ * @param line_count the number of lines to read (instructions can be multiple lines)
+ * @param line_start the number of lines to skip when going backwards
+ */
+void dsu_get_instr_trace_buffer(uint32_t cpu, struct instr_trace_buffer_line *buffer, uint32_t line_count, uint32_t line_start)
+{
+	
+	DWORD *data = (DWORD*) malloc(DSU_INST_TRCE_BUF_LINE_SIZE * line_count);
+	
+	uint32_t inst_trce_ctrl_reg = ioread32((uint32_t) DSU_BASE(cpu) + DSU_INST_TRCE_CTRL);
+	uint32_t inst_pointer = inst_trce_ctrl_reg & 0xFF;
+
+	/* inst_pointer points next line that will be written
+	 * ignore line_start lines
+	 * go back line_count lines to read them
+	 * this can very likely overflow, that is the reason for the modulo operation
+	 */
+	uint32_t first_line_to_read = inst_pointer - line_start - line_count;
+	uint32_t offset_start = (first_line_to_read * DSU_INST_TRCE_BUF_LINE_SIZE) % DSU_INST_TRCE_BUF_SIZE;
+	uint32_t read_size, line_ptr = 0;
+
+	/* if an overflow in the instruction trace would occur read only until the
+	 * end of the buffer in the first step
+	 */
+	if (offset_start + line_count * DSU_INST_TRCE_BUF_LINE_SIZE > DSU_INST_TRCE_BUF_SIZE)
+		read_size = DSU_INST_TRCE_BUF_SIZE - offset_start;
+	else
+		read_size = line_count * DSU_INST_TRCE_BUF_LINE_SIZE;
+
+	/* Read size in dwords */
+	ioread32(DSU_BASE(cpu) + DSU_INST_TRCE_BUF_START + offset_start, data, read_size / 4);
+
+	for(uint32_t i = 0; i < read_size / 4; i += 4) {
+		buffer[line_ptr].field[0] = data[i + 0];
+		buffer[line_ptr].field[1] = data[i + 1];
+		buffer[line_ptr].field[2] = data[i + 2];
+		buffer[line_ptr].field[3] = data[i + 3];
+		line_ptr++;
+	}
+
+	/* Read remaining data in case of an overflow in the circular instruction trace buffer  */
+	uint32_t remaining_size = line_count * DSU_INST_TRCE_BUF_LINE_SIZE - read_size;
+	if (remaining_size > 0) {
+		ioread32(DSU_BASE(cpu) + DSU_INST_TRCE_BUF_START, data, remaining_size / 4);
+		
+		for(uint32_t i = 0; i < remaining_size / 4; i += 4) {
+			buffer[line_ptr].field[0] = data[i + 0];
+			buffer[line_ptr].field[1] = data[i + 1];
+			buffer[line_ptr].field[2] = data[i + 2];
+			buffer[line_ptr].field[3] = data[i + 3];
+			line_ptr++;
+		}
+	}
+
+	free(data);	
 }

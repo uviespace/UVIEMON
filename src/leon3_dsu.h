@@ -64,7 +64,9 @@
 #define DSU_AHB_MASK_2		0x00005c
 
 #define DSU_INST_TRCE_BUF_START	0x100000
+#define DSU_INST_TRCE_BUF_SIZE 0x10000
 #define DSU_INST_TRCE_BUF_LINES	256
+#define DSU_INST_TRCE_BUF_LINE_SIZE 16
 #define DSU_INST_TRCE_CTRL	0x110000
 
 #define DSU_AHB_TRCE_BUF_START	0x200000
@@ -181,7 +183,10 @@ struct instr_trace_buffer_line {
 			uint32_t multi_cycle_inst :1;
 			uint32_t timetag	  :30;
 			uint32_t load_store_param :32;
-			uint32_t program_cntr	  :30;
+			/* program_cntr is still a 32bit number,
+			 * but the two lsb are always 0 and thus used for something else
+			 */
+			uint32_t program_cntr	  :30; 
 			uint32_t instr_trap	  :1;
 			uint32_t proc_error_mode  :1;
 			uint32_t opcode		  :32;
@@ -258,6 +263,9 @@ uint32_t dsu_get_reg_psr(uint32_t cpu);
 uint32_t dsu_get_reg_tbr(uint32_t cpu);
 uint32_t dsu_get_reg_trap(uint32_t cpu);
 void dsu_set_reg_psr(uint32_t cpu, uint32_t val);
+
+/* line_start is relative with 0 being the last executed line */
+void dsu_get_instr_trace_buffer(uint32_t cpu, struct instr_trace_buffer_line *buffer, uint32_t line_count, uint32_t line_start); 
 
 uint32_t dsu_get_reg_wim(uint32_t cpu);
 uint32_t dsu_get_reg_pc(uint32_t cpu);

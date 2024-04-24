@@ -18,12 +18,16 @@
 #include <fstream>	// For loading a file in load()
 #include <cmath>	// For std::ceil in load()
 
+#include <stdlib.h>
+
+#include "leon3_dsu.h"
+
 
 using namespace std;
 
 //static int command_count;
 
-#define COMMAND_COUNT 13
+#define COMMAND_COUNT 14
 
 static command commands[COMMAND_COUNT] =  {
 	{ "help", &help },
@@ -40,6 +44,8 @@ static command commands[COMMAND_COUNT] =  {
 
 	{ "bdump", &bdump },
 
+	{ "inst", &inst },
+
 	{ "load", &load },
 	{ "verify", &verify },
 	{ "run", &run }
@@ -48,6 +54,8 @@ static command commands[COMMAND_COUNT] =  {
 
 //static void register_command(command com, const char *name, void (*function)(const char*, int, char [MAX_PARAMETERS][MAX_PARAM_LENGTH]));
 static DWORD parse_parameter(char *param);
+
+static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address);
 
 std::unordered_map<int, std::string> tt_errors = {
 	{0x0, "[reset]: Power-on reset"},
@@ -249,7 +257,9 @@ void help(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 	printf("  wmemh: \t Write <data#2> 16-bit WORD to a memory <address#1>\n");
 	printf("  wmemb: \t Write <data#2> 8-bit BYTE to a memory <address#1>\n\n");
 
-	printf("  bdump: \t Read <length#2> BYTEs of data from memory starting at an <address#1>, saving the data to a <filePath#1>\n\n");
+	printf("  bdump:\t Read <length#2> BYTEs of data from memory starting at an <address#1>, saving the data to a <filePath#1>\n\n");
+
+	printf("  isnt:\t Prints the last <instruction_cnt#1> instruction to stdout\n\n");
 
 	printf("  load: \t Write a file with <filePath#1> to the device memory\n");
 	printf("  verify: \t Verify a file written to the device memory with <filePath#1>\n");
@@ -434,6 +444,118 @@ void wmemx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 		wmemb(param_1, param_2);
 	} else if (strcmp(command, "wmem") == 0) {
 		wmem(param_1, param_2);
+	}
+}
+
+void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+{
+	uint32_t instr_count = 11;
+
+	if (param_count > 1) {
+		printf("Inst only needs 1 parameter: the number of lines");
+		return;
+	}
+
+	if (param_count == 1) {
+		if ( (instr_count = strtol(params[0], NULL, 10)) == 0) {
+			printf("Parameter 1 must be a positive integer");
+			return;
+		}
+	}
+
+	
+	struct instr_trace_buffer_line *buffer = (instr_trace_buffer_line*) malloc(sizeof(instr_trace_buffer_line) * instr_count * 2);
+
+	/* TODO: manage active cpu */
+	dsu_get_instr_trace_buffer(0, buffer, instr_count * 2, 0);
+
+
+	uint32_t i_cntr = 0;
+	int i, page = 0;
+
+	/* go back instr_count number of instructions counting multi line instructions  */
+	/* there must be a better way to do this */
+	while(i_cntr < instr_count) {
+		for(i = instr_count * 2; i > -1; i--) {
+			/* count all non multi-line instruction as unique instructions  */
+			if ((buffer[i].field[0] & 0x40000000) == 0)
+				i_cntr++;
+
+			if (i_cntr == instr_count)
+				break;
+		}
+
+		if (i_cntr < instr_count) {
+			page++;
+			dsu_get_instr_trace_buffer(0, buffer, instr_count * 2, page * instr_count * 2);
+		}
+	}
+
+	uint32_t first_line = i;
+	char operation[31];
+ 
+	/* print header */
+	printf("    %9s  %8s  %30s  %10s  %10s\n", "TIME    ", "ADDRESS ", "INSTRUCTION        ", "RESULT  ", "SYMBOL");
+	while(page > -1) {
+		for(uint32_t j = first_line; j < instr_count * 2; j++) {
+			/* Check for non multi-line instruction second bit is zero  */
+			if ((buffer[j].field[0] & 0x40000000) == 0) {
+				if (j != first_line) {
+					printf("]  -\n");
+				}
+
+				/* first is the time tag with first 2 bits set to zero
+				 * second is program counter with last two bits set to zero
+				 */
+				parse_opcode(operation, buffer[j].field[3], buffer[j].field[2] & 0xFFFFFFFC); 
+				printf("    %9u  %08x  %-30s  [",
+					   buffer[j].field[0] & 0x3FFFFFFF,
+					   buffer[j].field[2] & 0xFFFFFFFC,
+					   operation);
+
+
+				/* Check for instruction trap bit 2 is set */
+				if ((buffer[j].field[2] & 0x2) == 0x2)
+					printf("  TRAP  ");
+				else
+					printf("%08x", buffer[j].load_store_param);
+
+			} else {
+				printf(" %08x", buffer[j].load_store_param);
+			}
+		}
+
+		if (--page < 0)
+			break;
+		
+		dsu_get_instr_trace_buffer(0, buffer, instr_count * 2, page * instr_count * 2);
+	}
+
+	printf("]  -\n");
+
+
+	free(buffer);
+}
+
+
+static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address)
+{
+	struct opcode op;
+	op.opcode_raw = opcode;
+
+	switch (op.op_call.op) {
+	case 0:
+		sprintf(buffer, "%#08x", opcode);
+		break;
+	case 1:
+		sprintf(buffer, "call  %#08x", address + 4 * op.op_call.disp30);
+		break;
+	case 2:
+		sprintf(buffer, "%#08x", opcode);
+		break;
+	case 3:
+		sprintf(buffer, "%#08x", opcode);
+		break;
 	}
 }
 
