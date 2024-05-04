@@ -30,12 +30,8 @@ typedef struct {
 	void (*function)(const char *, int, char [MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 } command;
 
-typedef struct {
-	
-} command_parameter;
 
-
-extern std::unordered_map<int, std::string> tt_errors;
+//extern std::unordered_map<int, std::string> tt_errors;
 
 std::string _hexToString(DWORD *data, size_t size);
 std::string _hexToString(WORD *data, size_t size);
@@ -101,6 +97,13 @@ struct opcode {
 	};
 }__attribute__((packed));
 
+
+struct tt_error {
+	uint32_t error_code;
+	const char * const error_desc;
+};
+
+
 /* Command functions  */
 void help  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 void scan  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
@@ -111,20 +114,22 @@ void reset (const char *command, int param_count, char params[MAX_PARAMETERS][MA
 void load  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 void verify(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 void bdump (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void wash  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void washc (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 void inst  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void reg   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+
 
 void wmem(DWORD addr, DWORD data);
 void wmemh(DWORD addr, WORD data);
 void wmemb(DWORD addr, BYTE data);
 
-void mem(DWORD startAddr, DWORD length = 16);
-void memh(DWORD startAddr, DWORD length = 32);
-void memb(DWORD startAddr, DWORD length = 64);
+void mem(DWORD startAddr, DWORD length);
+void memh(DWORD startAddr, DWORD length);
+void memb(DWORD startAddr, DWORD length);
 
 void bdump(DWORD startAddr, DWORD length, std::string path);
 
-void wash(WORD size = 16, DWORD addr = 0x40000000, DWORD c = 0);
+void wash(WORD size, DWORD addr, DWORD c);
 void load(std::string path);
 void verify(std::string path); // Really slow because sequential reads are dead slow
 

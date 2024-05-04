@@ -96,6 +96,9 @@ static uint32_t dsu_get_local_reg_addr(uint32_t cpu, uint32_t n, uint32_t cwp)
 }
 
 
+
+
+
 /**
  * @brief calculate address of input register %in for a window
  * @see GR712-UM v2.3 pp. 81
@@ -413,6 +416,133 @@ uint32_t dsu_get_reg_trap(uint32_t cpu)
 {
 	return ioread32((uint32_t) DSU_CTRL + DSU_REG_TRAP);
 }
+
+
+
+/**
+ * @brief get input register of current window pointer
+ *
+ * @param cpu the cpu number
+ *
+ * @param buffer point to array where values will be written
+ */
+void dsu_get_input_reg(uint32_t cpu, uint32_t *buffer)
+{
+	uint32_t psr_reg = dsu_get_reg_psr(cpu);
+	uint32_t cwp = psr_reg & 0x1F;
+
+	ioread32(DSU_REG_IN(cpu, cwp), buffer, 8);
+}
+
+
+/**
+ * @brief get local register of current window pointer
+ *
+ * @param cpu the cpu number
+ *
+ * @param buffer pointer to array where values will be written
+ */
+void dsu_get_local_reg(uint32_t cpu, uint32_t *buffer)
+{
+	uint32_t psr_reg = dsu_get_reg_psr(cpu);
+	uint32_t cwp = psr_reg & 0x1F;
+
+	ioread32(DSU_REG_LOCAL(cpu, cwp), buffer, 8);
+}
+
+/**
+ * @brief get output register of current window pointer
+ *
+ * @param cpu the cpu number
+ *
+ * @param buffer point to array where values will be written
+ */
+void dsu_get_output_reg(uint32_t cpu, uint32_t *buffer)
+{
+	uint32_t psr_reg = dsu_get_reg_psr(cpu);
+	uint32_t cwp = psr_reg & 0x1F;
+
+	ioread32(DSU_REG_OUT(cpu, cwp), buffer, 8);
+}
+
+/**
+ * @brief get gloabl register
+ *
+ * @param cpu the cpu number
+ *
+ * @param buffer point to array where values will be written
+ */
+void dsu_get_global_reg(uint32_t cpu, uint32_t *buffer)
+{
+	ioread32(DSU_REG_GLOBAL(cpu), buffer, 8);
+}
+
+void dsu_get_local_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
+{
+	ioread32(DSU_REG_LOCAL(cpu, window), buffer, 8);
+}
+
+
+void dsu_get_input_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
+{
+	ioread32(DSU_REG_IN(cpu, window), buffer, 8);
+}
+
+
+void dsu_get_output_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
+{
+	ioread32(DSU_REG_OUT(cpu, window), buffer, 8);
+}
+
+
+uint32_t dsu_get_local_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num)
+{
+	return ioread32(dsu_get_local_reg_addr(cpu, reg_num, cwp));
+}
+
+uint32_t dsu_get_input_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num)
+{
+	return ioread32(dsu_get_input_reg_addr(cpu, reg_num, cwp));
+}
+
+uint32_t dsu_get_output_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num)
+{
+	return ioread32(dsu_get_output_reg_addr(cpu, reg_num, cwp));
+}
+
+uint32_t dsu_get_global_reg_single(uint32_t cpu, uint32_t reg_num)
+{
+	return ioread32(dsu_get_global_reg_addr(cpu, reg_num));
+}
+
+
+union float_value dsu_get_float_reg(uint32_t cpu, uint32_t reg_num)
+{
+	union float_value val = {0};
+
+	if (reg_num > 31)
+		return val;
+	
+	val.u = ioread32(DSU_BASE(cpu) + DSU_FPU_REG + reg_num * 4);
+	return val;
+}
+
+
+union double_value dsu_get_double_reg(uint32_t cpu, uint32_t reg_num)
+{
+	uint32_t address = DSU_BASE(cpu) + DSU_FPU_REG + 32 * 4 + reg_num * 8;
+	union double_value val = {0};
+
+	if (reg_num > 12)
+		return val;
+
+	val.u = (uint64_t)ioread32(address);
+	val.u = val.u << 32;
+	val.u += (uint64_t)ioread32(address + 4);
+	
+	return val;
+}
+
 
 
 /**
@@ -921,6 +1051,20 @@ void dsu_set_reg_fp(uint32_t cpu, uint32_t cwp, uint32_t val)
 }
 
 
+/**
+ * @brief  get frame pointer register (%i6) in a window of a cpu
+ *
+ * @param cpu the cpu number
+ * @param cwp the window number
+ */   
+uint32_t dsu_get_reg_fp(uint32_t cpu, uint32_t cwp)
+{
+	uint32_t reg = dsu_get_input_reg_addr(cpu, 6, cwp);
+
+	return ioread32(reg);
+}
+
+
 
 /**
  * @brief get the last line_count lines from the instruction trace buffer
@@ -980,5 +1124,59 @@ void dsu_get_instr_trace_buffer(uint32_t cpu, struct instr_trace_buffer_line *bu
 		}
 	}
 
-	free(data);	
+	free(data);
+}
+
+
+void dsu_set_local_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value)
+{
+	uint32_t address = dsu_get_local_reg_addr(cpu, reg_num, cwp);
+
+	iowrite32(address, value);
+}
+
+
+void dsu_set_input_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value)
+{
+	uint32_t address = dsu_get_input_reg_addr(cpu, reg_num, cwp);
+
+	iowrite32(address, value);
+}
+
+
+void dsu_set_output_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value)
+{
+	uint32_t address = dsu_get_output_reg_addr(cpu, reg_num, cwp);
+
+	iowrite32(address, value);
+}
+
+
+void dsu_set_global_reg(uint32_t cpu, uint32_t reg_num, uint32_t value)
+{
+	uint32_t address = dsu_get_global_reg_addr(cpu, reg_num);
+
+	iowrite32(address, value);
+}
+
+
+void dsu_set_float_reg(uint32_t cpu, uint32_t reg_num, union float_value value)
+{
+	uint32_t address = DSU_BASE(cpu) + DSU_FPU_REG + reg_num * 4;
+	if (reg_num > 31)
+		return;
+
+	iowrite32(address, value.u);	
+}
+
+
+void dsu_set_double_reg(uint32_t cpu, uint32_t reg_num, union double_value value)
+{
+	uint32_t address = DSU_BASE(cpu) + DSU_FPU_REG + 32 * 4 + reg_num * 8;
+
+	if (reg_num > 12)
+		return;
+
+	iowrite32(address, (uint32_t)(value.u >> 32));
+	iowrite32(address + 4, (uint32_t)(value.u & 0xFFFFFFFF));
 }

@@ -91,12 +91,20 @@
 #define DSU_REG_TRAP	0x400020
 
 
+
+
 // TODO: this needs to be refactored
 #define DSU_CTRL ADDRESSES[get_connected_cpu_type()][DSU]
 #define DSU_OFFSET_CPU(x)	((x & 0x07) << 24)
 #define DSU_BASE(x)		(DSU_CTRL + DSU_OFFSET_CPU(x))
 
 //#define DSU_BASE(x)		(ADDRESSES[get_connected_cpu_type()][DSU] + DSU_OFFSET_CPU(x))
+
+#define DSU_REG_OUT(cpu, cwp) DSU_BASE(cpu) + DSU_IU_REG + ((cwp * 64 + 32) % (NWINDOWS * 64))
+#define DSU_REG_LOCAL(cpu, cwp) DSU_BASE(cpu) + DSU_IU_REG + ((cwp * 64 + 64) % (NWINDOWS * 64))
+#define DSU_REG_IN(cpu, cwp) DSU_BASE(cpu) + DSU_IU_REG + ((cwp * 64 + 96) % (NWINDOWS * 64))
+#define DSU_REG_GLOBAL(cpu) DSU_BASE(cpu) + DSU_IU_REG + (NWINDOWS * 64)
+
 
 
 /**
@@ -232,6 +240,18 @@ struct ahb_trace_buffer_line {
 }__attribute__((packed));
 
 
+
+union float_value {
+	uint32_t u;
+	float f;
+};
+
+union double_value {
+	uint64_t u;
+	double d;
+};
+
+
 /**
  * maps the AHB trace buffer, must be pointed to DSU_AHB_TRCE_BUF_START
  */
@@ -261,7 +281,27 @@ uint32_t dsu_get_global_reg(uint32_t cpu, uint32_t n);
 uint32_t dsu_get_dsu_ctrl(uint32_t cpu);
 uint32_t dsu_get_reg_psr(uint32_t cpu);
 uint32_t dsu_get_reg_tbr(uint32_t cpu);
+uint32_t dsu_get_reg_y(uint32_t cpu);
 uint32_t dsu_get_reg_trap(uint32_t cpu);
+
+void dsu_get_local_reg(uint32_t cpu, uint32_t *buffer);
+void dsu_get_input_reg(uint32_t cpu, uint32_t *buffer);
+void dsu_get_output_reg(uint32_t cpu, uint32_t *buffer);
+void dsu_get_global_reg(uint32_t cpu, uint32_t *buffer);
+
+void dsu_get_local_reg_window(uint32_t cpu, uint32_t cwp, uint32_t *buffer);
+void dsu_get_input_reg_window(uint32_t cpu, uint32_t cwp, uint32_t *buffer);
+void dsu_get_output_reg_window(uint32_t cpu, uint32_t cwp, uint32_t *buffer);
+
+uint32_t dsu_get_local_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num);
+uint32_t dsu_get_input_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num);
+uint32_t dsu_get_output_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num);
+uint32_t dsu_get_global_reg_single(uint32_t cpue, uint32_t cwp, uint32_t reg_num);
+
+union float_value dsu_get_float_reg(uint32_t cpu, uint32_t reg_num);
+union double_value dsu_get_double_reg(uint32_t cpu, uint32_t reg_num);
+
+
 void dsu_set_reg_psr(uint32_t cpu, uint32_t val);
 
 /* line_start is relative with 0 being the last executed line */
@@ -270,6 +310,7 @@ void dsu_get_instr_trace_buffer(uint32_t cpu, struct instr_trace_buffer_line *bu
 uint32_t dsu_get_reg_wim(uint32_t cpu);
 uint32_t dsu_get_reg_pc(uint32_t cpu);
 uint32_t dsu_get_reg_sp(uint32_t cpu, uint32_t cwp);
+uint32_t dsu_get_reg_fp(uint32_t cpu, uint32_t cwp);
 uint32_t dsu_get_reg_fsr(uint32_t cpu);
 
 
@@ -293,5 +334,15 @@ void dsu_set_reg_y(uint32_t cpu, uint32_t val);
 void dsu_set_reg_fsr(uint32_t cpu, uint32_t val);
 void dsu_set_reg_sp(uint32_t cpu, uint32_t cwp, uint32_t val);
 void dsu_set_reg_fp(uint32_t cpu, uint32_t cwp, uint32_t val);
+
+void dsu_set_local_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value);
+void dsu_set_input_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value);
+void dsu_set_output_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value);
+void dsu_set_global_reg(uint32_t cpu, uint32_t reg_num, uint32_t value);
+
+void dsu_set_float_reg(uint32_t cpu, uint32_t reg_num, union float_value value);
+void dsu_set_double_reg(uint32_t cpu, uint32_t reg_num, union double_value value);
+
+
 
 #endif /* LEON3_DSU_H */

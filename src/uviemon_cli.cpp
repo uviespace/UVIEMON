@@ -12,6 +12,7 @@
 #include "uviemon_cli.hpp"
 
 #include "address_map.h"
+#include "uviemon_reg.h"
 
 #include <iostream> // cout & cerr
 #include <iomanip>	// Used for setfill and setw (cout formatting)
@@ -20,6 +21,28 @@
 
 #include <stdlib.h>
 
+#ifndef PACKAGE
+  #define PACKAGE
+  #ifndef PACKAGE_VERSION
+    #define PACKAGE_VERSION
+    #include <bfd.h>
+    #undef PACKAGE_VERSION
+  #else
+    #include <bfd.h>
+  #endif
+  #undef PACKAGE
+#else
+  #ifndef PACKAGE_VERSION
+    #define PACKAGE_VERSION
+    #include <bfd.h>
+    #undef PACKAGE_VERSION
+  #else 
+    #include <bfd.h>
+  #endif
+#endif
+
+#include <dis-asm.h>
+
 #include "leon3_dsu.h"
 
 
@@ -27,7 +50,7 @@ using namespace std;
 
 //static int command_count;
 
-#define COMMAND_COUNT 14
+#define COMMAND_COUNT 16
 
 static command commands[COMMAND_COUNT] =  {
 	{ "help", &help },
@@ -45,6 +68,9 @@ static command commands[COMMAND_COUNT] =  {
 	{ "bdump", &bdump },
 
 	{ "inst", &inst },
+	{ "reg", &reg },
+
+	{ "wash", &washc },
 
 	{ "load", &load },
 	{ "verify", &verify },
@@ -56,8 +82,14 @@ static command commands[COMMAND_COUNT] =  {
 static DWORD parse_parameter(char *param);
 
 static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address);
+static void print_register_error_msg(const char * const reg);
+static void print_value_error_msg(const char * const value);
+//static int parse_register_number(const char * const reg, uint32_t * const reg_num, uint32_t highest_register);
+static const char * const get_tt_error_desc(uint32_t error_code);
 
-std::unordered_map<int, std::string> tt_errors = {
+#define TT_ERROR_COUNT 32
+
+struct tt_error tt_errors[] = {
 	{0x0, "[reset]: Power-on reset"},
 	{0x2b, "[write_error]: write buffer error"},
 	{0x01, "[instruction_access_error]: Error during instruction fetch"},
@@ -90,7 +122,7 @@ std::unordered_map<int, std::string> tt_errors = {
 	{0x1E, "[interrupt_level_14]: Asynchronous interrupt 14"},
 	{0x1F, "[interrupt_level_15]: Asynchronous interrupt 15"},
 	{0x80, "[trap_instruction]: OK"}
-	// Anything larger than 0x80 will be some other Software trap instruction (TA)
+	/* Anything larger than 0x80 will be some other Software trap instruction (TA) */
 };
 
 
@@ -259,7 +291,9 @@ void help(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 
 	printf("  bdump:\t Read <length#2> BYTEs of data from memory starting at an <address#1>, saving the data to a <filePath#1>\n\n");
 
-	printf("  isnt:\t Prints the last <instruction_cnt#1> instruction to stdout\n\n");
+	printf("  inst:\t Prints the last <instruction_cnt#1> instruction to stdout\n\n");
+
+	printf("  reg:\t Prints or sets registers\n\n");
 
 	printf("  load: \t Write a file with <filePath#1> to the device memory\n");
 	printf("  verify: \t Verify a file written to the device memory with <filePath#1>\n");
@@ -284,26 +318,33 @@ void run(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_P
 
 	if (tt < 0x80) // Hardware traps
 	{
-		cerr << " => Error: Hardware trap!" << endl;
-		cerr << endl;
-		cerr << "tt 0x" << hex << (unsigned int)tt << ", " << tt_errors[tt] << endl;
+		printf(" => Error: Hardware trap!\n\n");
+		printf("tt 0x%02x, %s\n", (uint8_t)tt, get_tt_error_desc(tt));
 	}
 	else if (tt == 0x80) // Successfull trap
 	{
-		cout << " => OK!" << endl;
+		printf(" => OK!\n");	
 	}
 	else if (tt > 0x80 && tt <= 0xFF) // Software trap
 	{
-		cerr << " => Error: Software trap!" << endl;
-		cerr << endl;
-		cerr << "tt 0x" << hex << (unsigned int)tt << ", [trap_instruction]: Software trap instruction (TA)" << endl;
+		printf(" => Error: Software trap!\n\n");
+		printf("tt 0x%02x, [trap_instruction]: Software trap instruction (TA)\n", (uint8_t)tt);
 	}
 	else // Something else that's not documented
 	{
-		cerr << " => Error!" << endl;
-		cerr << endl;
-		cerr << "tt 0x" << hex << (unsigned int)tt << ", [unknown]: unknown trap!" << endl;
+		printf(" => Error!\n\n");
+		printf("tt 0x%02x, [unknown]: unknown trap!", (uint8_t)tt);
 	}
+}
+
+static const char * const get_tt_error_desc(uint32_t error_code)
+{
+	for (int i = 0; i < TT_ERROR_COUNT; i++) {
+		if (tt_errors[i].error_code == error_code)
+			return tt_errors[i].error_desc;
+	}
+
+	return "Error code not found";
 }
 
 void reset(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
@@ -355,7 +396,7 @@ void verify(const char *command, int param_count, char params[MAX_PARAMETERS][MA
 	verify(params[0]);
 }
 
-void wash(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void washc(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	WORD size = 16;
 	// was 0x40000000
@@ -410,11 +451,11 @@ void memx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 	}
 
 	if (strcmp(command, "memh") == 0) {
-		param_count == 1 ? memh(param_1) : memh(param_1, param_2);
+		param_count == 1 ? memh(param_1, 32) : memh(param_1, param_2);
 	} else if(strcmp(command, "memb") == 0) {
-		param_count == 1 ? memb(param_1) : memb(param_1, param_2);
+		param_count == 1 ? memb(param_1, 64) : memb(param_1, param_2);
 	} else if (strcmp(command, "mem") == 0) {
-		param_count == 1 ? mem(param_1) : mem(param_1, param_2);
+		param_count == 1 ? mem(param_1, 16) : mem(param_1, param_2);
 	}
 }
 
@@ -427,13 +468,14 @@ void wmemx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 		return;
 	}
 
-	if ( (param_1 = strtol(params[0], NULL, 10)) == 0) {
-		printf("Parameter 1 must be a positive integer");
+	if ( (param_1 = parse_parameter(params[0])) == 0) {
+		printf("Parameter 1 must be a positive integer\n");
 		return;
 	}
 
-	if ( (param_2 = strtol(params[1], NULL, 10)) == 0) {
-		printf("Parameter 2 must be a positive integer");
+	param_2 = parse_parameter(params[1]);
+	if (errno != 0) {
+		printf("Parameter 2 a 32 bit int\n");
 		return;
 	}
 
@@ -450,6 +492,7 @@ void wmemx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	uint32_t instr_count = 11;
+	uint32_t cpu = 0;
 
 	if (param_count > 1) {
 		printf("Inst only needs 1 parameter: the number of lines");
@@ -467,7 +510,7 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 	struct instr_trace_buffer_line *buffer = (instr_trace_buffer_line*) malloc(sizeof(instr_trace_buffer_line) * instr_count * 2);
 
 	/* TODO: manage active cpu */
-	dsu_get_instr_trace_buffer(0, buffer, instr_count * 2, 0);
+	dsu_get_instr_trace_buffer(cpu, buffer, instr_count * 2, 0);
 
 
 	uint32_t i_cntr = 0;
@@ -487,7 +530,7 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 
 		if (i_cntr < instr_count) {
 			page++;
-			dsu_get_instr_trace_buffer(0, buffer, instr_count * 2, page * instr_count * 2);
+			dsu_get_instr_trace_buffer(cpu, buffer, instr_count * 2, page * instr_count * 2);
 		}
 	}
 
@@ -508,10 +551,10 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 				 * second is program counter with last two bits set to zero
 				 */
 				parse_opcode(operation, buffer[j].field[3], buffer[j].field[2] & 0xFFFFFFFC); 
-				printf("    %9u  %08x  %-30s  [",
+				printf("    %9u  %08x  ",
 					   buffer[j].field[0] & 0x3FFFFFFF,
-					   buffer[j].field[2] & 0xFFFFFFFC,
-					   operation);
+					   buffer[j].field[2] & 0xFFFFFFFC);
+				printf(" [");
 
 
 				/* Check for instruction trap bit 2 is set */
@@ -537,9 +580,166 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 	free(buffer);
 }
 
+void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+{
+	uint32_t cpu = 0;
+	uint32_t input, reg_value;
+	int base;
+	char *input_str;
+
+	union float_value reg_value_float, float_input;
+	union double_value reg_value_double, double_input;
+
+	struct register_desc desc;
+	struct register_func *func_handler;
+
+	if (param_count == 0) {
+		uint32_t cwp = dsu_get_reg_psr(cpu) & 0x1F;
+		register_print_summary(cpu, cwp);
+
+	} else {
+		desc = parse_register(params[0], cpu);
+
+		/* Register could not be parsed */
+		if (strcmp(desc.name, "inv") == 0) {
+			print_register_error_msg(params[0]);
+			return;
+		}
+
+		/*  Print register summary for the requested window */
+		if (strcmp(desc.name, "w") == 0) {
+			register_print_summary(cpu, desc.window);
+			return;
+		}
+
+		/* Get function pointer for getting and setting requsted register */
+		func_handler = get_register_functions(desc);
+
+		if (strcmp(func_handler->name, "inv") == 0) {
+			print_register_error_msg(params[0]);
+			return;
+		}
+
+		/* Parse value from second parameter if available */
+		if (param_count == 2) {
+			input_str = params[1];
+			base = 10;
+			errno = 0;
+			
+			switch(desc.type) {
+			case standard_reg:
+				if (input_str[0] == '0' && input_str[1] == 'x') {
+					base = 16;
+					input_str = input_str + 2;
+				}
+
+				input = strtol(input_str, NULL, base);
+
+				if (errno != 0) {
+					print_value_error_msg(params[1]);
+					return;
+				}
+
+				((register_func_standard*)func_handler)->set_value(desc, input);
+				break;
+
+			case float_reg:
+				float_input.f = strtof(input_str, NULL);
+
+				if (errno != 0) {
+					print_value_error_msg(params[1]);
+					return;
+				}
+
+				((register_func_float*)func_handler)->set_value(desc, float_input);
+				break;
+
+			case double_reg:
+				double_input.d = strtod(input_str, NULL);
+
+				if (errno != 0) {
+					print_value_error_msg(params[1]);
+					return;
+				}
+
+				((register_func_double*)func_handler)->set_value(desc, double_input);
+				break;
+				
+			default:
+				break;
+			}
+		}
+
+		switch(desc.type) {
+		case standard_reg:
+			reg_value = ((register_func_standard*)func_handler)->get_value(desc);
+			printf("   %3s = %d (0x%08x)\n", params[0], reg_value, reg_value);
+			break;
+
+		case float_reg:
+			reg_value_float = ((register_func_float*)func_handler)->get_value(desc);
+			printf("   %3s = %f (0x%08x)\n", params[0], reg_value_float.f, reg_value_float.u);
+			break;
+
+		case double_reg:
+			reg_value_double = ((register_func_double*)func_handler)->get_value(desc);
+			printf("   %3s = %lf (0x%016lx)\n", params[0], reg_value_double.d, reg_value_double.u);
+			break;
+
+		case none:
+			print_register_error_msg(params[0]);
+			break;
+		}
+	}
+
+}
+
+static void print_register_error_msg(const char * const reg)
+{
+	printf("No such register %s\n", reg);
+}
+
+static void print_value_error_msg(const char * const value)
+{
+	printf("Could not parse value: %s\n", value);
+}
+
 
 static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address)
 {
+	/* list supported arch */
+	/*const char **arch_list = bfd_arch_list();
+	const char **a;
+
+	for (a = arch_list; *a; a++) {
+		printf("\t%s\n", *a);
+	}
+
+	free(arch_list);
+
+	
+	static bool disassembler_initialized = false;
+	static disassembler_ftype disassembler_p;
+	static disassemble_info info;
+
+	if (!disassembler_initialized) {
+		disassembler_p = disassembler(bfd_arch_sparc, true, bfd_mach_sparc, NULL);
+
+		init_disassemble_info(&info, stdout, (fprintf_ftype)fprintf, (fprintf_styled_ftype)fprintf);
+		info.read_memory_func = buffer_read_memory;
+		info.buffer_vma = address;
+		info.arch = bfd_arch_sparc;
+		info.mach = bfd_mach_sparc_v8plus;
+		disassemble_init_for_target(&info);
+
+		disassembler_initialized = true;
+	}
+
+	info.buffer = (bfd_byte *)&opcode;
+	info.buffer_length = 1;
+	
+	disassembler_p(0, &info);*/
+	
 	struct opcode op;
 	op.opcode_raw = opcode;
 
