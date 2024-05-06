@@ -16,7 +16,7 @@
  *
  * @defgroup leon3_dsu LEON3 DSU interface
  *
- * @brief Access to the DSU of the GR712RC LEON3FT (and possibly others)
+ * @brief Access to the DSU of the GR712RC LEON3FT, LEON4 (and possibly others)
  *
  *
  * ## Overview
@@ -403,7 +403,7 @@ void dsu_clear_cpu_error_mode(uint32_t cpu)
 
 
 /**
- * @brief read out the DSU trap register; ONLY WORKS FOR ONE PROCESSOR ATM!
+ * @brief read out the DSU trap register
  *
  * @param cpu the cpu number
  *
@@ -414,7 +414,7 @@ void dsu_clear_cpu_error_mode(uint32_t cpu)
 
 uint32_t dsu_get_reg_trap(uint32_t cpu)
 {
-	return ioread32((uint32_t) DSU_CTRL + DSU_REG_TRAP);
+	return ioread32((uint32_t) DSU_BASE(cpu) + DSU_REG_TRAP);
 }
 
 
@@ -477,45 +477,101 @@ void dsu_get_global_reg(uint32_t cpu, uint32_t *buffer)
 	ioread32(DSU_REG_GLOBAL(cpu), buffer, 8);
 }
 
+/**
+ * @brief all local register of a specific window
+ *
+ * @param cpu the cpu number
+ * @param winndow the window from where the registers are returned
+ * @param the buffer to write the results to, needs to have enough space allocated
+ */
 void dsu_get_local_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
 {
 	ioread32(DSU_REG_LOCAL(cpu, window), buffer, 8);
 }
 
 
+/**
+ * @brief all input register of a specific window
+ *
+ * @param cpu the cpu number
+ * @param winndow the window from where the registers are returned
+ * @param the buffer to write the results to, needs to have enough space allocated
+ */
 void dsu_get_input_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
 {
 	ioread32(DSU_REG_IN(cpu, window), buffer, 8);
 }
 
-
+/**
+ * @brief all output register of a specific window
+ *
+ * @param cpu the cpu number
+ * @param winndow the window from where the registers are returned
+ * @param the buffer to write the results to, needs to have enough space allocated
+ */
 void dsu_get_output_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
 {
 	ioread32(DSU_REG_OUT(cpu, window), buffer, 8);
 }
 
 
+/**
+ * @brief get a single local register of a specific window
+ *
+ * @param cpu the cpu number
+ * @param cwp the window from which the register value is retrieved
+ * @param reg_num the register number to be retrieved
+ */
 uint32_t dsu_get_local_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num)
 {
 	return ioread32(dsu_get_local_reg_addr(cpu, reg_num, cwp));
 }
 
+
+/**
+ * @brief get a single input register of a specific window
+ *
+ * @param cpu the cpu number
+ * @param cwp the window from which the register value is retrieved
+ * @param reg_num the register number to be retrieved
+ */
 uint32_t dsu_get_input_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num)
 {
 	return ioread32(dsu_get_input_reg_addr(cpu, reg_num, cwp));
 }
 
+/**
+ * @brief get a output local register of a specific window
+ *
+ * @param cpu the cpu number
+ * @param cwp the window from which the register value is retrieved
+ * @param reg_num the register number to be retrieved
+ */
 uint32_t dsu_get_output_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num)
 {
 	return ioread32(dsu_get_output_reg_addr(cpu, reg_num, cwp));
 }
 
+/**
+ * @brief get a single global register value
+ *
+ * @param cpu the cpu number
+ * @param reg_num the register number to be retrieved
+ */
 uint32_t dsu_get_global_reg_single(uint32_t cpu, uint32_t reg_num)
 {
 	return ioread32(dsu_get_global_reg_addr(cpu, reg_num));
 }
 
 
+/**
+ * @brief get a floating point register value
+ *
+ * @param cpu the cpu number
+ * @param reg_num the register number to be retrieved
+ *
+ * @return union of the register as uint32_t and float
+ */
 union float_value dsu_get_float_reg(uint32_t cpu, uint32_t reg_num)
 {
 	union float_value val = {0};
@@ -527,7 +583,14 @@ union float_value dsu_get_float_reg(uint32_t cpu, uint32_t reg_num)
 	return val;
 }
 
-
+/**
+ * @brief get a double point register value
+ *
+ * @param cpu the cpu number
+ * @param reg_num the register number to be retrieved
+ *
+ * @return union of the register as uint64_t and double
+ */
 union double_value dsu_get_double_reg(uint32_t cpu, uint32_t reg_num)
 {
 	uint32_t address = DSU_BASE(cpu) + DSU_FPU_REG + 32 * 4 + reg_num * 8;
@@ -617,9 +680,8 @@ void dsu_set_cpu_wake_up(uint32_t cpu)
 
 	//iowrite32((uint32_t)0x80000210, 1 << cpu); // LEON3
 	// iowrite32be(1 << cpu, (uint32_t)0xFF904010); // LEON4
-	iowrite32((uint32_t)ADDRESSES[get_connected_cpu_type()][WAKE_STATE], 1 << cpu);
+	iowrite32((uint32_t)ADDRESSES[ftdi_get_connected_cpu_type()][WAKE_STATE], 1 << cpu);
 }
-
 
 /**
  * @brief  get status of a cpu core
@@ -632,7 +694,7 @@ void dsu_set_cpu_wake_up(uint32_t cpu)
 uint32_t dsu_get_cpu_state(uint32_t cpu)
 {
 	//return (ioread32((uint32_t)0x80000210) >> cpu) & 1;
-	return (ioread32((uint32_t)ADDRESSES[get_connected_cpu_type()][WAKE_STATE]) >> cpu) & 1;
+	return (ioread32((uint32_t)ADDRESSES[ftdi_get_connected_cpu_type()][WAKE_STATE]) >> cpu) & 1;
 }
 
 
@@ -1128,6 +1190,14 @@ void dsu_get_instr_trace_buffer(uint32_t cpu, struct instr_trace_buffer_line *bu
 }
 
 
+/**
+ * @brief set a local register value
+ *
+ * @param cpu the cpu number
+ * @param cwp the window of the register to set
+ * @param reg_num the register number to be set
+ * @param value the value to set the register to
+ */
 void dsu_set_local_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value)
 {
 	uint32_t address = dsu_get_local_reg_addr(cpu, reg_num, cwp);
@@ -1136,6 +1206,14 @@ void dsu_set_local_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t va
 }
 
 
+/**
+ * @brief set a input register value
+ *
+ * @param cpu the cpu number
+ * @param cwp the window of the register to set
+ * @param reg_num the register number to be set
+ * @param value the value to set the register to
+ */
 void dsu_set_input_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value)
 {
 	uint32_t address = dsu_get_input_reg_addr(cpu, reg_num, cwp);
@@ -1144,6 +1222,14 @@ void dsu_set_input_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t va
 }
 
 
+/**
+ * @brief set a output register value
+ *
+ * @param cpu the cpu number
+ * @param cwp the window of the register to set
+ * @param reg_num the register number to be set
+ * @param value the value to set the register to
+ */
 void dsu_set_output_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t value)
 {
 	uint32_t address = dsu_get_output_reg_addr(cpu, reg_num, cwp);
@@ -1151,7 +1237,13 @@ void dsu_set_output_reg(uint32_t cpu, uint32_t cwp, uint32_t reg_num, uint32_t v
 	iowrite32(address, value);
 }
 
-
+/**
+ * @brief set a global register value
+ *
+ * @param cpu the cpu number
+ * @param reg_num the register number to be set
+ * @param value the value to set the register to
+ */
 void dsu_set_global_reg(uint32_t cpu, uint32_t reg_num, uint32_t value)
 {
 	uint32_t address = dsu_get_global_reg_addr(cpu, reg_num);
@@ -1160,6 +1252,13 @@ void dsu_set_global_reg(uint32_t cpu, uint32_t reg_num, uint32_t value)
 }
 
 
+/**
+ * @brief set a float register
+ *
+ * @param cpu the cpu number
+ * @param reg_num the register number to set
+ * @param value the value to set the register to as union of float and uint32_t
+ */
 void dsu_set_float_reg(uint32_t cpu, uint32_t reg_num, union float_value value)
 {
 	uint32_t address = DSU_BASE(cpu) + DSU_FPU_REG + reg_num * 4;
@@ -1169,7 +1268,13 @@ void dsu_set_float_reg(uint32_t cpu, uint32_t reg_num, union float_value value)
 	iowrite32(address, value.u);	
 }
 
-
+/**
+ * @brief set a double register
+ *
+ * @param cpu the cpu number
+ * @param reg_num the register number to set
+ * @param value the value to set the register to as union of double and uint64_t
+ */
 void dsu_set_double_reg(uint32_t cpu, uint32_t reg_num, union double_value value)
 {
 	uint32_t address = DSU_BASE(cpu) + DSU_FPU_REG + 32 * 4 + reg_num * 8;

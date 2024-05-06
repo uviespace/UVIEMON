@@ -50,9 +50,7 @@ using namespace std;
 
 //static int command_count;
 
-#define COMMAND_COUNT 16
-
-static command commands[COMMAND_COUNT] =  {
+static const command commands[] =  {
 	{ "help", &help },
 	{ "scan", &scan },
 	{ "reset", &reset },
@@ -69,6 +67,7 @@ static command commands[COMMAND_COUNT] =  {
 
 	{ "inst", &inst },
 	{ "reg", &reg },
+	{ "cpu", &cpu },
 
 	{ "wash", &washc },
 
@@ -239,7 +238,7 @@ int parse_input(char *input)
 	 * if the number of commands ever becomes so large that a simple
 	 * naive search won't be enough. This part has to be rewritten. 
 	 */
-	for(int i = 0; i < COMMAND_COUNT; i++) {
+	for(uint32_t i = 0; i < (sizeof(commands) / sizeof(commands[0])); i++) {
 		if (strcmp(command, commands[i].command_name) == 0) {
 			commands[i].function(command, param_count - 1, params);
 			command_found = true;
@@ -314,7 +313,7 @@ void scan(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 
 void run(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
-	BYTE tt = runCPU(0); // Execute on CPU Core 1
+	BYTE tt = runCPU(ftdi_get_active_cpu()); // Execute on CPU Core 1
 
 	if (tt < 0x80) // Hardware traps
 	{
@@ -400,7 +399,7 @@ void washc(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 {
 	WORD size = 16;
 	// was 0x40000000
-	DWORD address = ADDRESSES[get_connected_cpu_type()][SDRAM_START_ADDRESS], c = 0;
+	DWORD address = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS], c = 0;
 
 	if (param_count > 0) {
 		if ( (size = parse_parameter(params[0])) == 0 ) {
@@ -492,7 +491,7 @@ void wmemx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	uint32_t instr_count = 11;
-	uint32_t cpu = 0;
+	uint32_t cpu = ftdi_get_active_cpu();
 
 	if (param_count > 1) {
 		printf("Inst only needs 1 parameter: the number of lines");
@@ -551,9 +550,10 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 				 * second is program counter with last two bits set to zero
 				 */
 				parse_opcode(operation, buffer[j].field[3], buffer[j].field[2] & 0xFFFFFFFC); 
-				printf("    %9u  %08x  ",
+				printf("    %9u  %08x  %30s",
 					   buffer[j].field[0] & 0x3FFFFFFF,
-					   buffer[j].field[2] & 0xFFFFFFFC);
+					   buffer[j].field[2] & 0xFFFFFFFC,
+					   operation);
 				printf(" [");
 
 
@@ -582,7 +582,7 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 
 void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
-	uint32_t cpu = 0;
+	uint32_t cpu = ftdi_get_active_cpu();
 	uint32_t input, reg_value;
 	int base;
 	char *input_str;
@@ -694,6 +694,50 @@ void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 
 }
 
+
+void cpu (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+{
+    /* TODO: refactor to put this information in ftdi device */
+	uint32_t cpu_count = ftdi_get_connected_cpu_type() == LEON3 ? 2 : 4;
+	uint32_t cpu;
+	
+	if (param_count == 0) {
+
+		for(uint32_t i = 0; i < cpu_count; i++) {
+			printf("   cpu %d: %-8s %s\n", i,
+				   dsu_get_cpu_state(i) ? "disabled" : "enabled",
+				   ftdi_get_active_cpu() == i ? "active" : "");
+		}
+		
+	} else if (param_count == 2) {
+		errno = 0;
+
+		cpu = strtol(params[1], NULL, 10);
+
+		if (errno != 0) {
+			printf("Could not parse cpu number: %s", params[1]);
+			return;
+		}
+		
+		
+		if (strcmp(params[0], "enable") == 0) {
+			dsu_set_cpu_wake_up(cpu);
+			printf("Cpu %d enabled\n", cpu);
+		} else if (strcmp(params[0], "disable") == 0)  {
+			ftdi_set_cpu_idle(cpu);
+			printf("Cpu %d disabled\n", cpu);
+		} else if (strcmp(params[0], "active") == 0) {
+			if (dsu_get_cpu_state(cpu)) {
+				dsu_set_cpu_wake_up(cpu);
+				printf("Cpu %d enabled\n", cpu);
+			}
+			
+			ftdi_set_active_cpu(cpu);
+			printf("Set cpu %d active\n", cpu);
+		}
+	}
+}
+
 static void print_register_error_msg(const char * const reg)
 {
 	printf("No such register %s\n", reg);
@@ -738,7 +782,8 @@ static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address)
 	info.buffer = (bfd_byte *)&opcode;
 	info.buffer_length = 1;
 	
-	disassembler_p(0, &info);*/
+	disassembler_p(0, &info);
+	 */
 	
 	struct opcode op;
 	op.opcode_raw = opcode;
@@ -1022,7 +1067,7 @@ void load(string path)
 	}
 
 	// Begin writing to this address was 0x40000000
-	const DWORD addr = ADDRESSES[get_connected_cpu_type()][SDRAM_START_ADDRESS];
+	const DWORD addr = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS];
 	iowrite32(addr, writeBuffer, writeSize, true);
 
 	cout << "Loading file complete!" << endl;
@@ -1066,7 +1111,7 @@ void verify(std::string path)
 	DWORD readBuffer[readSize];
 
 	// Begin writing from this address was 0x40000000; 
-	const DWORD addr = ADDRESSES[get_connected_cpu_type()][SDRAM_START_ADDRESS];
+	const DWORD addr = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS];
 	ioread32(addr, readBuffer, readSize, true);
 
 	cout << "Verifying file... " << flush;

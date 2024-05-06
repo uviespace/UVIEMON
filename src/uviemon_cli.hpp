@@ -117,7 +117,7 @@ void bdump (const char *command, int param_count, char params[MAX_PARAMETERS][MA
 void washc (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 void inst  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 void reg   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-
+void cpu   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 
 void wmem(DWORD addr, DWORD data);
 void wmemh(DWORD addr, WORD data);

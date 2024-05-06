@@ -31,11 +31,12 @@ static void init_core_1();
 static void set_other_cores_idle();
 
 
-FT_STATUS open_device(DWORD device_index, int cpu_type)
+FT_STATUS ftdi_open_device(DWORD device_index, int cpu_type)
 {
 	device.device_index = device_index;
 	device.cpu_type = cpu_type;
 	device.first_run = true;
+	device.active_cpu = 0;
 	
 	// Open FTDI device handle
 	FT_STATUS ftStatus = FT_Open(device_index, &device.ft_handle);
@@ -99,7 +100,7 @@ FT_STATUS open_device(DWORD device_index, int cpu_type)
 	return ftStatus;
 }
 
-void close_device()
+void ftdi_close_device()
 {
 	// Reset device before closing handle, good practice
 	FT_SetBitMode(device.ft_handle, 0x0, 0x00);
@@ -110,9 +111,23 @@ void close_device()
 	printf("Goodbye\n");
 }
 
-int get_connected_cpu_type()
+int ftdi_get_connected_cpu_type()
 {
 	return device.cpu_type;
+}
+
+void ftdi_set_active_cpu(uint32_t cpu)
+{
+	if ((device.cpu_type == 0 && cpu > 2) || (device.cpu_type == 1 && cpu > 4))
+		return;
+
+	device.active_cpu = cpu;
+}
+
+
+uint32_t ftdi_get_active_cpu()
+{
+	return device.active_cpu;
 }
 
 DWORD get_devices_count()
@@ -507,6 +522,33 @@ static void set_other_cores_idle()
 	}
 
 	
+}
+
+void ftdi_set_cpu_idle(uint32_t cpu)
+{
+	uint32_t tmp = dsu_get_reg_tbr(0) & ~0xfff;
+
+	dsu_set_noforce_debug_mode(cpu);
+	dsu_set_cpu_break_on_iu_watchpoint(cpu);
+
+	dsu_set_force_debug_on_watchpoint(cpu);
+
+	dsu_set_reg_tbr(cpu, tmp);
+	dsu_set_reg_pc(cpu, tmp);
+	dsu_set_reg_npc(cpu, tmp + 0x4);
+
+	dsu_clear_iu_reg_file(cpu);
+	// Default invalid mask
+	dsu_set_reg_wim(cpu, 0x2);
+	
+	// Set CWP to 7
+	dsu_set_reg_psr(cpu, 0xf34010e1);
+
+	dsu_clear_cpu_break_on_iu_watchpoint(cpu);
+	// Resume cpu 1
+	dsu_clear_force_debug_on_watchpoint(cpu);
+
+	dsu_clear_cpu_error_mode(cpu);
 }
 
 static FT_STATUS reset_JTAG_state_machine()

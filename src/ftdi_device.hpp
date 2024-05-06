@@ -18,6 +18,7 @@
 #include "lib/ftdi/ftd2xx.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 const unsigned int CODE_ADDR_COMM = 0x2; // address/command register opcode, 35-bit length
 const DWORD CODE_DATA = 0x3;			 // data register opcode, 33-bit length
@@ -40,12 +41,17 @@ typedef struct {
 	DWORD device_index;
 	int cpu_type;
 	bool first_run;
+	uint32_t active_cpu;
 } ftdi_device;
 
-FT_STATUS open_device(DWORD device_index, int cpu_type);
-void close_device();
+FT_STATUS ftdi_open_device(DWORD device_index, int cpu_type);
+void ftdi_close_device();
 
-int get_connected_cpu_type();
+int ftdi_get_connected_cpu_type();
+
+void ftdi_set_active_cpu(uint32_t cpu);
+uint32_t ftdi_get_active_cpu();
+void ftdi_set_cpu_idle(uint32_t cpu);
 
 DWORD get_devices_count();
 void get_device_list();

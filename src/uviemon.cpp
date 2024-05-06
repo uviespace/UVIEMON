@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	if (!FT_SUCCESS(open_device(device_index, cpu_type))) {
+	if (!FT_SUCCESS(ftdi_open_device(device_index, cpu_type))) {
 		fprintf(stderr, "Unable to use device %d. Aborting...\n", device_index);
 		return 1;
 	}
@@ -220,6 +220,8 @@ int main(int argc, char *argv[])
 	printf("OK. Ready!\n\n");
 	
 	console();
+
+	ftdi_close_device();
 
 	return 0;
 }

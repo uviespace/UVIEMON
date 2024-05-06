@@ -57,7 +57,7 @@ static union double_value get_reg_double(struct register_desc desc);
 static void set_reg_double(struct register_desc desc, union double_value value);
 
 
-static struct register_func_standard function_handler[] = {
+static const struct register_func_standard function_handler[] = {
 	{ "inv", none,     NULL,            NULL },
 	{ "psr", standard_reg, &get_reg_psr,    &set_reg_psr },
 	{ "tbr", standard_reg, &get_reg_tbr,    &set_reg_tbr },

@@ -94,7 +94,7 @@
 
 
 // TODO: this needs to be refactored
-#define DSU_CTRL ADDRESSES[get_connected_cpu_type()][DSU]
+#define DSU_CTRL ADDRESSES[ftdi_get_connected_cpu_type()][DSU]
 #define DSU_OFFSET_CPU(x)	((x & 0x07) << 24)
 #define DSU_BASE(x)		(DSU_CTRL + DSU_OFFSET_CPU(x))
 
