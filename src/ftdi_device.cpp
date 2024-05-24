@@ -54,7 +54,7 @@ FT_STATUS ftdi_open_device(DWORD device_index, int cpu_type)
 		unsigned long minorVer = (driver_version >> 8) & 0xFF;
 		unsigned long buildVer = driver_version & 0xFF;
 
-		printf("Device driver version: %lu.%lu.%lu", majorVer, minorVer, buildVer);
+		printf("Device driver version: %lu.%lu.%lu\n", majorVer, minorVer, buildVer);
 	} else {
 		fprintf(stderr, "Cannot get driver version for device %d\n", device_index);
 		return ftStatus;
@@ -986,12 +986,12 @@ void scan_instruction_codes(BYTE bitLengthIR)
 		if (length != 0)
 		{
 			//cout << "- DR length for address 0x" << hex << uppercase << (unsigned int)i << ": " << dec << length << " bit" << endl;
-			printf("- DR length for address %#010x: %d bit", (unsigned int) i, length);
+			printf("- DR length for address %#010x: %d bit\n", (unsigned int) i, length);
 			num_instructions ++;
 		}
 	}
 
-	printf("Scan complete! Found %d instructions.", num_instructions);
+	printf("Scan complete! Found %d instructions.\n", num_instructions);
 }
 
 BYTE scan_DR_length(BYTE opcode)

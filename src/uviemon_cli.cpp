@@ -13,13 +13,14 @@
 
 #include "address_map.h"
 #include "uviemon_reg.h"
+//#include "uviemon_opcode.h"
 
 #include <iostream> // cout & cerr
 #include <iomanip>	// Used for setfill and setw (cout formatting)
 #include <fstream>	// For loading a file in load()
 #include <cmath>	// For std::ceil in load()
-
 #include <stdlib.h>
+
 
 #ifndef PACKAGE
   #define PACKAGE
@@ -86,7 +87,9 @@ static void print_value_error_msg(const char * const value);
 //static int parse_register_number(const char * const reg, uint32_t * const reg_num, uint32_t highest_register);
 static const char * const get_tt_error_desc(uint32_t error_code);
 
-#define TT_ERROR_COUNT 32
+static void hex_to_string_8(const uint8_t * const data, char *output, size_t size);
+static void hex_to_string_16(const uint16_t * const data, char *output, size_t size);
+static void hex_to_string_32(const uint32_t * const data, char *output, size_t size);
 
 struct tt_error tt_errors[] = {
 	{0x0, "[reset]: Power-on reset"},
@@ -125,7 +128,73 @@ struct tt_error tt_errors[] = {
 };
 
 
-string _hexToString(DWORD *data, size_t size)
+static void hex_to_string_8(const uint8_t * const data, char *output, size_t size)
+{
+	char value;
+	size_t i;
+	
+	for(i = 0; i < size; i++) {
+		value = (char)data[i];
+
+		if (value >= 32 && value <= 126)
+			output[i] = value;
+		else
+			output[i] = '.';
+	}
+
+	output[i] = '\0';
+}
+
+static void hex_to_string_16(const uint16_t * const data, char *output, size_t size)
+{
+	char value[2];
+	size_t i;
+	
+	for(i = 0; i < size; i++) {
+		value[0] = (char)((data[i] >> 8) & 0xFF);
+		value[1] = (char)(data[i] & 0xFF);
+
+		for(uint32_t j = 0; j < 2; j++) {
+			if (value[j] >= 32 && value[j] <= 126)
+				output[i * 2 + j] = value[j];
+			else
+				output[i * 2 + j] = '.';
+		}
+		
+		
+	}
+
+	output[i * 2] = '\0';
+}
+
+
+static void hex_to_string_32(const uint32_t * const data, char *output, size_t size)
+{
+	char value[4];
+	size_t i;
+	
+	for(i = 0; i < size; i++) {
+		value[0] = (char)((data[i] >> 24) & 0xFF);
+		value[1] = (char)((data[i] >> 16) & 0xFF);
+		value[2] = (char)((data[i] >> 8) & 0xFF);
+		value[3] = (char)(data[i] & 0xFF);
+
+		for(uint32_t j = 0; j < 4; j++) {
+			if (value[j] >= 32 && value[j] <= 126)
+				output[i * 4 + j] = value[j];
+			else
+				output[i * 4 + j] = '.';
+		}
+		
+		
+	}
+
+	output[i * 4] = '\0';
+}
+
+
+
+/*string _hexToString(DWORD *data, size_t size)
 {
 	BYTE byteArray[size * sizeof(data[0])];
 
@@ -133,7 +202,7 @@ string _hexToString(DWORD *data, size_t size)
 	{
 		byteArray[i * 4] = (BYTE)((data[i] >> 24) & 0xFF);
 		byteArray[i * 4 + 1] = (BYTE)((data[i] >> 16) & 0xFF);
-		byteArray[i * 4 + 2] = (BYTE)((data[i] >> 8) & 0xFF);
+ 		byteArray[i * 4 + 2] = (BYTE)((data[i] >> 8) & 0xFF);
 		byteArray[i * 4 + 3] = (BYTE)(data[i] & 0xFF);
 	}
 
@@ -204,7 +273,7 @@ string _hexToString(BYTE *data, size_t size)
 	}
 
 	return s;
-}
+}*/
 
 /*void cleanup()
 {
@@ -290,9 +359,9 @@ void help(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 
 	printf("  bdump:\t Read <length#2> BYTEs of data from memory starting at an <address#1>, saving the data to a <filePath#1>\n\n");
 
-	printf("  inst:\t Prints the last <instruction_cnt#1> instruction to stdout\n\n");
-
-	printf("  reg:\t Prints or sets registers\n\n");
+	printf("  cpu:\t\t Prints cpu status or enables/disables/activates a specific cpu\n");
+	printf("  inst:\t\t Prints the last <instruction_cnt#1> instruction to stdout\n");
+	printf("  reg:\t\t Prints or sets registers\n\n");
 
 	printf("  load: \t Write a file with <filePath#1> to the device memory\n");
 	printf("  verify: \t Verify a file written to the device memory with <filePath#1>\n");
@@ -338,7 +407,7 @@ void run(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_P
 
 static const char * const get_tt_error_desc(uint32_t error_code)
 {
-	for (int i = 0; i < TT_ERROR_COUNT; i++) {
+	for (uint32_t i = 0; i < sizeof(tt_errors) / sizeof(tt_errors[0]); i++) {
 		if (tt_errors[i].error_code == error_code)
 			return tt_errors[i].error_desc;
 	}
@@ -832,128 +901,140 @@ void mem(DWORD startAddr, DWORD length)
 
 	DWORD chars[showWidth];
 	WORD arrayIndex = 0;
+	char string_output[4 * showWidth + 1];
 
 	ioread32(startAddr, arr, length, length > 256); // Use sequential reads
-
-	for (DWORD i = 0; i < length; i++)
-	{
-		if (i % showWidth == 0)
-		{
-			if (i > 0)
-			{
-				cout << _hexToString(chars, arrayIndex);
+	
+	for (DWORD i = 0; i < length; i++) {
+		if (i % showWidth == 0) {
+			if (i > 0) {
+				hex_to_string_32((uint32_t*)chars, string_output, arrayIndex);	
+				printf("%s\n", string_output);
+				//cout << _hexToString(chars, arrayIndex);
 
 				arrayIndex = 0;
 
-				cout << endl;
+				//cout << endl;
 			}
 
-			cout << hex << nouppercase << "0x" << setfill('0') << setw(8) << startAddr << "  " << flush;
+			printf("%#08x  ", startAddr);
+			//cout << hex << nouppercase << "0x" << setfill('0') << setw(8) << startAddr << "  " << flush;
 			startAddr += 16;
 		}
 
-		cout << setfill('0') << setw(8) << hex << nouppercase << arr[i] << "  " << flush;
+		printf("%08x  ", arr[i]);
+		//cout << setfill('0') << setw(8) << hex << nouppercase << arr[i] << "  " << flush;
 
-		chars[arrayIndex] = arr[i];
-		arrayIndex++;
+		chars[arrayIndex++] = arr[i];
 	}
 
-	if (arrayIndex < showWidth)
-	{
+	hex_to_string_32((uint32_t*)chars, string_output, (arrayIndex < showWidth) ? arrayIndex : showWidth);
+	printf("%s\n", string_output);
+	
+	/*if (arrayIndex < showWidth) {
+		hex_to_string_32((uint32_t*)chars, string_output, arrayIndex);
 		cout << _hexToString(chars, arrayIndex) << endl;
-	}
-	else
-	{
+	} else {
+		hex_to_string_32((uint32_t*)chars, string_output, showWidth);
 		cout << _hexToString(chars, showWidth) << endl;
-	}
+	}*/
+
+	
 }
 
 void memh(DWORD startAddr, DWORD length)
 {
 	const DWORD maxAddr = startAddr + 2 * length;
 	const BYTE arrSize = 8;
+	char string_output[17];
 
 	WORD index = 0;
 	WORD arrayIndex = 0;
 	WORD arr[arrSize];
 
 	// Loop through all the addresses and read out individual DWORDs
-	for (DWORD addr = startAddr; addr < maxAddr; addr += 2)
-	{
-		if (index % arrSize == 0)
-		{
-			if (index > 0)
-			{
-				cout << _hexToString(arr, arrSize);
+	for (DWORD addr = startAddr; addr < maxAddr; addr += 2) {
+		if (index % arrSize == 0) {
+			if (index > 0) {
+				hex_to_string_16((uint16_t*)arr, string_output, arrSize);
+				printf("%s\n", string_output);
+				
+				//cout << _hexToString(arr, arrSize);
 				arrayIndex = 0;
 
-				cout << endl;
+				//cout << endl;
 			}
 
-			cout << hex << nouppercase << "0x" << setfill('0') << setw(8) << addr << "  " << flush;
+			printf("%#08x  ", addr);
+			//cout << hex << nouppercase << "0x" << setfill('0') << setw(8) << addr << "  " << flush;
 		}
 
 		WORD data = ioread16(addr);
-		arr[arrayIndex] = data;
-		arrayIndex++;
+		arr[arrayIndex++] = data;
 
-		cout << setfill('0') << setw(4) << hex << nouppercase << data << "  " << flush;
+		printf("%04x ", data);
+		//cout << setfill('0') << setw(4) << hex << nouppercase << data << "  " << flush;
 
 		index++;
 	}
 
-	if (index < arrSize)
-	{
+	hex_to_string_16((uint16_t*)arr, string_output, (index < arrSize) ? arrayIndex : arrSize);
+	printf("%s\n", string_output);
+
+	/*if (index < arrSize) {
 		cout << _hexToString(arr, arrayIndex) << endl;
-	}
-	else
-	{
+	} else {
 		cout << _hexToString(arr, arrSize) << endl;
-	}
+	}*/
+	
 }
 
 void memb(DWORD startAddr, DWORD length)
 {
 	const DWORD maxAddr = startAddr + 1 * length;
 	const BYTE arrSize = 16;
+	char string_output[17];
 
 	WORD index = 0;
 	WORD arrayIndex = 0;
 	BYTE arr[arrSize];
 
 	// Loop through all the addresses and read out individual DWORDs
-	for (DWORD addr = startAddr; addr < maxAddr; addr++)
-	{
-		if (index % arrSize == 0)
-		{
-			if (index > 0)
-			{
-				cout << _hexToString(arr, arrSize);
+	for (DWORD addr = startAddr; addr < maxAddr; addr++) {
+		if (index % arrSize == 0) {
+			if (index > 0) {
+				hex_to_string_8((uint8_t*) arr, string_output, arrSize);
+				printf("%s\n", string_output);
+				//cout << _hexToString(arr, arrSize);
 				arrayIndex = 0;
 
-				cout << endl;
+				//cout << endl;
 			}
 
-			cout << hex << nouppercase << "0x" << setfill('0') << setw(8) << addr << "  " << flush;
+			printf("%#08x  ", addr);
+			//cout << hex << nouppercase << "0x" << setfill('0') << setw(8) << addr << "  " << flush;
 		}
 
 		WORD data = ioread8(addr);
-		arr[arrayIndex] = data;
-		arrayIndex++;
+		arr[arrayIndex++] = data;
 
-		cout << setfill('0') << setw(2) << hex << nouppercase << data << "  " << flush;
+		printf("%02x ", data);
+		//cout << setfill('0') << setw(2) << hex << nouppercase << data << "  " << flush;
 
 		index++;
 	}
 
-	if (index < arrSize)
+	hex_to_string_8((uint8_t*)arr, string_output, (index < arrSize) ? arrayIndex : arrSize);
+	printf("%s\n", string_output);
+
+	/*if (index < arrSize)
 	{
 		cout << _hexToString(arr, arrayIndex) << endl;
 	}
 	else
 	{
 		cout << _hexToString(arr, arrSize) << endl;
-	}
+	}*/
 }
 
 void bdump(DWORD startAddr, DWORD length, string path)

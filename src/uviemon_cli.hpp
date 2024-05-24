@@ -31,11 +31,11 @@ typedef struct {
 } command;
 
 
-//extern std::unordered_map<int, std::string> tt_errors;
-
+/*
 std::string _hexToString(DWORD *data, size_t size);
 std::string _hexToString(WORD *data, size_t size);
 std::string _hexToString(BYTE *data, size_t size);
+*/
 
 int parse_input(char *input);
 void print_help_text();
@@ -97,7 +97,7 @@ struct opcode {
 	};
 }__attribute__((packed));
 
-
+ 
 struct tt_error {
 	uint32_t error_code;
 	const char * const error_desc;
