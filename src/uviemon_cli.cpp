@@ -20,32 +20,15 @@
 #include <fstream>	// For loading a file in load()
 #include <cmath>	// For std::ceil in load()
 #include <stdlib.h>
-
-
-#ifndef PACKAGE
-  #define PACKAGE
-  #ifndef PACKAGE_VERSION
-    #define PACKAGE_VERSION
-    #include <bfd.h>
-    #undef PACKAGE_VERSION
-  #else
-    #include <bfd.h>
-  #endif
-  #undef PACKAGE
-#else
-  #ifndef PACKAGE_VERSION
-    #define PACKAGE_VERSION
-    #include <bfd.h>
-    #undef PACKAGE_VERSION
-  #else 
-    #include <bfd.h>
-  #endif
-#endif
-
-#include <dis-asm.h>
+#include <unistd.h> // fork
+#include <fcntl.h>  // open
+#include <sys/wait.h> // wait
 
 #include "leon3_dsu.h"
 
+static const char *opcode_filename = "/tmp/opcode.bin";
+static const char *objdump_output = "/tmp/obj_dump_out";
+static const char *obj_dump_cmd[] = { "sparc-elf-objdump", "-b", "binary", "-m", "sparc", "--adjust-vma=0x40000000", "-D", "/tmp/opcode.bin", NULL };
 
 using namespace std;
 
@@ -78,13 +61,12 @@ static const command commands[] =  {
 }; 
 
 
-//static void register_command(command com, const char *name, void (*function)(const char*, int, char [MAX_PARAMETERS][MAX_PARAM_LENGTH]));
 static DWORD parse_parameter(char *param);
 
 static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address);
+static int readline(FILE *file, char *buffer, int buffer_length, int *read_length);
 static void print_register_error_msg(const char * const reg);
 static void print_value_error_msg(const char * const value);
-//static int parse_register_number(const char * const reg, uint32_t * const reg_num, uint32_t highest_register);
 static const char * const get_tt_error_desc(uint32_t error_code);
 
 static void hex_to_string_8(const uint8_t * const data, char *output, size_t size);
@@ -191,102 +173,6 @@ static void hex_to_string_32(const uint32_t * const data, char *output, size_t s
 
 	output[i * 4] = '\0';
 }
-
-
-
-/*string _hexToString(DWORD *data, size_t size)
-{
-	BYTE byteArray[size * sizeof(data[0])];
-
-	for (size_t i = 0; i < size; i++)
-	{
-		byteArray[i * 4] = (BYTE)((data[i] >> 24) & 0xFF);
-		byteArray[i * 4 + 1] = (BYTE)((data[i] >> 16) & 0xFF);
- 		byteArray[i * 4 + 2] = (BYTE)((data[i] >> 8) & 0xFF);
-		byteArray[i * 4 + 3] = (BYTE)(data[i] & 0xFF);
-	}
-
-	string s = "";
-
-	for (size_t i = 0; i < sizeof(byteArray); i++)
-	{
-		char newChar = char(byteArray[i]);
-
-		if (newChar >= 32 && newChar <= 126)
-		{
-			s += newChar;
-		}
-		else
-		{
-			s += ".";
-		}
-	}
-
-	return s;
-}
-
-string _hexToString(WORD *data, size_t size)
-{
-	BYTE byteArray[size * sizeof(data[0])];
-
-	for (size_t i = 0; i < size; i++)
-	{
-		byteArray[i * 2] = (BYTE)((data[i] >> 8) & 0xFF);
-		byteArray[i * 2 + 1] = (BYTE)(data[i] & 0xFF);
-	}
-
-	string s = "";
-
-	for (size_t i = 0; i < sizeof(byteArray); i++)
-	{
-		char newChar = char(byteArray[i]);
-
-		if (newChar >= 32 && newChar <= 126)
-		{
-			s += newChar;
-		}
-		else
-		{
-			s += ".";
-		}
-	}
-
-	return s;
-}
-
-string _hexToString(BYTE *data, size_t size)
-{
-	string s = "";
-
-	for (size_t i = 0; i < size; i++)
-	{
-		char newChar = char(data[i]);
-
-		if (newChar >= 32 && newChar <= 126)
-		{
-			s += newChar;
-		}
-		else
-		{
-			s += ".";
-		}
-	}
-
-	return s;
-}*/
-
-/*void cleanup()
-{
-	free(commands);
-}
- */
-
-/*static void register_command(command com, const char *name, void (*function)(const char*, int, char [MAX_PARAMETERS][MAX_PARAM_LENGTH]))
-{
-	com.command_name = name;
-	com.function = function;
-}
-*/
 
 int parse_input(char *input)
 {
@@ -424,13 +310,147 @@ void reset(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 
 void load(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
+	FILE *fp;
+	const uint32_t cutoff_size = 64 * 1024;
+	int64_t file_size, bytes_read = 0;
+	size_t current_read;
+	uint8_t byte_buffer[4096];
+	uint32_t buffer[1024];
+	uint32_t write_address = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS];
+	
 	if (param_count != 1) {
 		printf("load needs the path to the file to load.\n");
 		return;
 	}
 
-	load(params[0]);
+	//load(params[0]);
+	
+	fp = fopen(params[0], "rb");
+
+	if (fp == NULL) {
+		fprintf(stderr, "File could not be opnend!\n");
+		return;
+	}
+
+	/* check filesize */
+	fseek(fp, 0L, SEEK_END);
+	file_size = ftell(fp);
+	fseek(fp, 0L, SEEK_SET);
+
+	if (file_size == 0) {
+		fprintf(stderr, "File is empty!\n");
+		return;
+	}
+
+	if (file_size < cutoff_size) {
+		fprintf(stderr, "FILE size is too small! Needs to be at least 64 KiB...\n");
+		return;
+	}
+
+	/* Ignore the the elf header for now */
+	fseek(fp, cutoff_size, SEEK_SET);
+
+	printf("Uploading file '%s' ...\n", params[0]);
+	printf("File size: %ld B\n", file_size);
+
+	while(!feof(fp)) {
+		current_read = fread(byte_buffer, sizeof(uint8_t), 4096, fp);
+
+		for(uint64_t i = 0; i < current_read / 4; i++) {
+			buffer[i] = byte_buffer[i * 4] << 24
+						| byte_buffer[i * 4 + 1] << 16
+						| byte_buffer[i * 4 + 2] << 8
+						| byte_buffer[i * 4 + 3];
+		}
+		
+		iowrite32(write_address, buffer, current_read / 4, false);
+		
+		bytes_read += current_read;
+		write_address += current_read;
+		printf("Writing data to memory... %ld %%\n", (bytes_read * 100) / (file_size - cutoff_size));
+	}
+
+	fclose(fp);
+
+	printf("Bytes read: %ld B\n", bytes_read);
+	printf("Loading file complete!\n");
 }
+
+
+/*void load(string path)
+{
+	ifstream file;
+	file.open(path, ios::binary | ios::ate);
+
+	const streamsize size = file.tellg();
+	const uint32_t cutoffSize = 64 * 1024; // Cut off the first 64 kiB of data (ELF-header + alignment section)
+
+	if (size == -1)
+	{
+		cerr << "File not found!" << endl;
+		return;
+	}
+	else if (size == 0)
+	{
+		cerr << "File is empty!" << endl;
+		return;
+	}
+	else if (size < cutoffSize)
+	{
+		cerr << "File size is too small! Needs to be at least 64 kiB..." << endl;
+		return;
+	}
+
+	// Create buffer for individual BYTES of binary data
+	char buffer[size] = {}; 
+
+	file.seekg(0, ios::beg);
+
+	if (!file.read(buffer, size))
+	{
+		cerr << "Error loading file '" << path << "'..." << endl;
+		return;
+	}
+
+	const streamsize bytesRead = file.gcount(); // Number of bytes actually read
+	file.close();
+
+	cout << "Uploading File '" << path << "'..." << endl;
+	cout << "File Size: " << dec << size << " B" << endl;
+	cout << "Size Read: " << dec << bytesRead << " B" << endl;
+	// TODO: Check for compatability or something?
+	cout << endl;
+
+	
+	// Save cut-off header to an extra file to restore the full binary when downloading again
+	ofstream wfile;
+	wfile.open(path + "-header.tmp", ios::out | ios::binary);
+	wfile.write(buffer, cutoffSize);
+	wfile.close();
+	*/
+/*
+	// Divide to convert BYTES to DWORDS
+	const unsigned int offset = cutoffSize * sizeof(BYTE) / sizeof(DWORD);
+
+	// Divide to convert BYTES to DWORDS and subtract the offset
+	const unsigned int writeSize = ceil(float(bytesRead) * sizeof(BYTE) / sizeof(DWORD)) - offset; 
+	DWORD writeBuffer[writeSize];
+
+	for (DWORD i = offset; i < writeSize + offset; i++) // Start after cutoff
+	{
+		const DWORD wdword = ((unsigned char)(buffer[i * 4]) << 24) |
+			((unsigned char)(buffer[i * 4 + 1] & 0xFF) << 16) |
+			((unsigned char)(buffer[i * 4 + 2] & 0xFF) << 8)  |
+			((unsigned char)(buffer[i * 4 + 3] & 0xFF));
+		writeBuffer[i - offset] = wdword;
+	}
+
+	// Begin writing to this address was 0x40000000
+	const DWORD addr = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS];
+	iowrite32(addr, writeBuffer, writeSize, true);
+
+	cout << "Loading file complete!" << endl;
+}*/
 
 void bdump(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
@@ -456,13 +476,142 @@ void bdump(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 
 void verify(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
+	const uint64_t cutoff_size = 64 * 1024;
+
+	DWORD read_address = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS];
+	FILE *fp;
+	uint64_t file_size, bytes_read = 0;
+	size_t current_read;
+	/* byte buffer for file reading */
+	uint8_t byte_buffer[4096];
+	/* uint32_t buffer to upload to leon machine */
+	uint32_t buffer[1024], buffer_cmp, error_found = 0;
+	
 	if (param_count != 1) {
 		printf("verify needs the path to the file to load.\n");
 		return;
 	}
 
-	verify(params[0]);
+	fp = fopen(params[0], "rb");
+
+	if (fp == NULL) {
+		fprintf(stderr, "Error loading file!\n");
+		return;
+	}
+
+	/* check filesize */
+	fseek(fp, 0L, SEEK_END);
+	file_size = ftell(fp);
+	fseek(fp, 0L, SEEK_SET);
+
+	if (file_size == 0) {
+		fprintf(stderr, "File is empty!\n");
+		return;
+	}
+
+	if (file_size < cutoff_size) {
+		fprintf(stderr, "FILE size is too small! Needs to be at least 64 KiB...\n");
+		return;
+	}
+
+	/* Ignore the the elf header for now */
+	fseek(fp, cutoff_size, SEEK_SET);
+
+	printf("Verifying file '%s'...\n", params[0]);
+	printf("File size: %ld\n", file_size);
+	printf("Verifying file...\n");
+
+	while(!feof(fp)) {
+		current_read = fread(byte_buffer, sizeof(uint8_t), 4096, fp);
+		ioread32(read_address, buffer, current_read / 4, false);
+
+		for (uint64_t i = 0; i < current_read / 4; i++) {
+			buffer_cmp = byte_buffer[i * 4] << 24
+						 | byte_buffer[i * 4 + 1] << 16
+						 | byte_buffer[i * 4 + 2] << 8
+						 | byte_buffer[i * 4 + 3];
+			
+
+			if (buffer_cmp != buffer[i]) {
+				printf("Verifying file... ERROR! Byte %ld incorrect!\n", bytes_read + (i * 4));
+				error_found = 1;
+			}
+		}
+		bytes_read += current_read;
+		read_address += current_read;
+
+		printf("Verifying file... %ld %%\n", bytes_read * 100 / (file_size - cutoff_size));
+	}
+
+	fclose(fp);
+
+	if (error_found)
+		printf("Verifying file... Errors found!\n");
+	else
+		printf("Verifying file... OK!\n");
+	
 }
+
+/*void verify(std::string path)
+{
+	ifstream file;
+	file.open(path, ios::binary | ios::ate);
+
+	const streamsize size = file.tellg();
+	const uint32_t cutoffSize = 64 * 1024; // Cut off the first 64 kiB of data (ELF-header + alignment section)
+
+	if (size < cutoffSize)
+	{
+		cerr << "File size is too small! Needs to be at least 64 kiB..." << endl;
+		return;
+	}
+
+	char buffer[size] = {}; // Create buffer for individual BYTES of binary data
+
+	file.seekg(0, ios::beg);
+
+	if (!file.read(buffer, size))
+	{
+		cerr << "Error loading file '" << path << "'..." << endl;
+		return;
+	}
+
+	const streamsize bytesRead = file.gcount(); // Number of bytes actually read
+	file.close();
+
+	cout << "Verifying File '" << path << "'..." << endl;
+	cout << "File Size: " << dec << size << " B" << endl;
+	cout << "Size Read: " << dec << bytesRead << " B" << endl;
+	// TODO: Check for compatability or something?
+	cout << endl;
+
+	const unsigned int offset = cutoffSize * sizeof(BYTE) / sizeof(DWORD);						  // Divide to convert BYTES to DWORDS
+	const unsigned int readSize = ceil(float(bytesRead) * sizeof(BYTE) / sizeof(DWORD)) - offset; // Divide to convert BYTES to DWORDS and subtract the offset
+	DWORD readBuffer[readSize];
+
+	// Begin writing from this address was 0x40000000; 
+	const DWORD addr = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS];
+	ioread32(addr, readBuffer, readSize, true);
+
+	cout << "Verifying file... " << flush;
+
+	for (DWORD i = offset; i < readSize; i++) // Start after cutoff
+	{
+		const DWORD wdword = ((unsigned char)(buffer[i * 4]) << 24) |
+			((unsigned char)(buffer[i * 4 + 1] & 0xFF) << 16) |
+			((unsigned char)(buffer[i * 4 + 2] & 0xFF) << 8) |
+			((unsigned char)(buffer[i * 4 + 3] & 0xFF));
+
+		if (readBuffer[i - offset] != wdword)
+		{
+			cerr << "\rVerifying file... ERROR! Byte " << dec << i << " incorrect." << endl;
+			return;
+		}
+		cout << "\rVerifying file... " << dec << (unsigned int)((float)i / (float)(readSize - 1) * 100.0) << "%    " << flush;
+	}
+
+	cout << "\rVerifying file... OK!    " << endl;
+}*/
 
 void washc(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
@@ -619,7 +768,7 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 				 * second is program counter with last two bits set to zero
 				 */
 				parse_opcode(operation, buffer[j].field[3], buffer[j].field[2] & 0xFFFFFFFC); 
-				printf("    %9u  %08x  %30s",
+				printf("    %9u  %08x  %-30s",
 					   buffer[j].field[0] & 0x3FFFFFFF,
 					   buffer[j].field[2] & 0xFFFFFFFC,
 					   operation);
@@ -817,60 +966,86 @@ static void print_value_error_msg(const char * const value)
 	printf("Could not parse value: %s\n", value);
 }
 
+static int readline(FILE *file, char *buffer, int buffer_length, int *read_length)
+{
+	int i = 0;
+	while(!feof(file) && i < (buffer_length - 1)) {
+		fread(&buffer[i++], sizeof(char), 1, file);
+		if (buffer[i-1] == '\n') {
+			buffer[i-1] = '\0';
+			*read_length = i - 1;
+			return 1;
+		}
+	}
+	buffer[i] = '\0';
+	*read_length = i;
+	return 0;
+}
 
 static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address)
 {
-	/* list supported arch */
-	/*const char **arch_list = bfd_arch_list();
-	const char **a;
+	/* This process will be extremely slow, due to multiple file operations */
 
-	for (a = arch_list; *a; a++) {
-		printf("\t%s\n", *a);
+	int fd = -1;
+	char vma_buffer[OBJ_DUMP_STRING_LENGTH];
+	char stdout_buffer[256];
+	char *opcode_result;
+	int lines = 0;
+	int read_length;
+	char **command;
+
+	/* Write opcode to file for object dump  */
+	FILE *opcode_file;
+	FILE *stdout_file;
+
+	opcode_file = fopen(opcode_filename, "w");
+	fwrite(&opcode, sizeof(uint32_t), 1, opcode_file);
+	fclose(opcode_file);
+
+	/* Set up command with correct vma for object dump */
+	sprintf(vma_buffer, "--adjust-vma=%#08x", address);
+	command = (char**)malloc(sizeof(char*) * (OBJ_DUMP_PARAM_LENGTH + 1));
+	for(int i = 0; i < (OBJ_DUMP_PARAM_LENGTH + 1); i++) {
+		if (i == VMA_PARAM) {
+			command[i] = vma_buffer;
+		} else {
+			command[i] = ((char**)obj_dump_cmd)[i];
+		}
 	}
 
-	free(arch_list);
-
-	
-	static bool disassembler_initialized = false;
-	static disassembler_ftype disassembler_p;
-	static disassemble_info info;
-
-	if (!disassembler_initialized) {
-		disassembler_p = disassembler(bfd_arch_sparc, true, bfd_mach_sparc, NULL);
-
-		init_disassemble_info(&info, stdout, (fprintf_ftype)fprintf, (fprintf_styled_ftype)fprintf);
-		info.read_memory_func = buffer_read_memory;
-		info.buffer_vma = address;
-		info.arch = bfd_arch_sparc;
-		info.mach = bfd_mach_sparc_v8plus;
-		disassemble_init_for_target(&info);
-
-		disassembler_initialized = true;
+	/* run objdump and capture output  */
+	if (fork() == 0) {
+		/* open file for stdout redirection */
+		fd = open(objdump_output, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+		/* redirect stdout to created file */
+		dup2(fd, 1);
+		execvp(((char**)command)[0], (char**)command);
+		close(fd);
+		exit(0);
 	}
 
-	info.buffer = (bfd_byte *)&opcode;
-	info.buffer_length = 1;
-	
-	disassembler_p(0, &info);
+	/* wait for objdump and read stdout that was piped into a file */
+	wait(0);
+	free(command);
+	stdout_file = fopen(objdump_output, "r");
+
+	while(lines < 7) {
+		if (readline(stdout_file, stdout_buffer, 256, &read_length))
+			lines++;
+	}
+	readline(stdout_file, stdout_buffer, 256, &read_length);
+	if (read_length == 0)
+		sprintf(buffer, "unknown error");
+
+	/*
+	 * format is something like this:
+	 * <address>:\t<opcode in hex>\t<disassembly>
 	 */
-	
-	struct opcode op;
-	op.opcode_raw = opcode;
+	opcode_result = strtok(stdout_buffer, "\t");
+	opcode_result = strtok(NULL, "\t");
+	opcode_result = strtok(NULL, "\t");
 
-	switch (op.op_call.op) {
-	case 0:
-		sprintf(buffer, "%#08x", opcode);
-		break;
-	case 1:
-		sprintf(buffer, "call  %#08x", address + 4 * op.op_call.disp30);
-		break;
-	case 2:
-		sprintf(buffer, "%#08x", opcode);
-		break;
-	case 3:
-		sprintf(buffer, "%#08x", opcode);
-		break;
-	}
+	strcpy(buffer, opcode_result);
 }
 
 void wmem(DWORD addr, DWORD data)
@@ -1065,153 +1240,19 @@ void bdump(DWORD startAddr, DWORD length, string path)
 
 void wash(WORD size, DWORD addr, DWORD c)
 {
-	DWORD data[size] = {};
+	DWORD data[size];
 
 	for (WORD i = 0; i < size; i++)
-	{
 		data[i] = c;
-	}
 
-	cout << "Writing 0x" << hex << (unsigned int)c << " to " << dec << (unsigned int)size << " DWORD(s) in memory, starting at 0x" << hex << addr << "..." << endl;
+	printf("Writing %#x to %d DWORD(s) in memory, starting at %#08x ...\n", c, size, addr);
 
 	iowrite32(addr, data, size, true);
 
-	cout << "Wash of " << (unsigned int)size << " DWORD(s) complete!" << endl;
+	printf("Wash of %d DWORD(s) complete!\n", size);
 }
 
-void load(string path)
-{
-	ifstream file;
-	file.open(path, ios::binary | ios::ate);
 
-	const streamsize size = file.tellg();
-	const uint32_t cutoffSize = 64 * 1024; // Cut off the first 64 kiB of data (ELF-header + alignment section)
 
-	if (size == -1)
-	{
-		cerr << "File not found!" << endl;
-		return;
-	}
-	else if (size == 0)
-	{
-		cerr << "File is empty!" << endl;
-		return;
-	}
-	else if (size < cutoffSize)
-	{
-		cerr << "File size is too small! Needs to be at least 64 kiB..." << endl;
-		return;
-	}
 
-	// Create buffer for individual BYTES of binary data
-	char buffer[size] = {}; 
-
-	file.seekg(0, ios::beg);
-
-	if (!file.read(buffer, size))
-	{
-		cerr << "Error loading file '" << path << "'..." << endl;
-		return;
-	}
-
-	const streamsize bytesRead = file.gcount(); // Number of bytes actually read
-	file.close();
-
-	cout << "Uploading File '" << path << "'..." << endl;
-	cout << "File Size: " << dec << size << " B" << endl;
-	cout << "Size Read: " << dec << bytesRead << " B" << endl;
-	// TODO: Check for compatability or something?
-	cout << endl;
-
-	/*
-	// Save cut-off header to an extra file to restore the full binary when downloading again
-	ofstream wfile;
-	wfile.open(path + "-header.tmp", ios::out | ios::binary);
-	wfile.write(buffer, cutoffSize);
-	wfile.close();
-	*/
-
-	// Divide to convert BYTES to DWORDS
-	const unsigned int offset = cutoffSize * sizeof(BYTE) / sizeof(DWORD);
-
-	// Divide to convert BYTES to DWORDS and subtract the offset
-	const unsigned int writeSize = ceil(float(bytesRead) * sizeof(BYTE) / sizeof(DWORD)) - offset; 
-	DWORD writeBuffer[writeSize];
-
-	for (DWORD i = offset; i < writeSize + offset; i++) // Start after cutoff
-	{
-		const DWORD wdword = ((unsigned char)(buffer[i * 4]) << 24) |
-			((unsigned char)(buffer[i * 4 + 1] & 0xFF) << 16) |
-			((unsigned char)(buffer[i * 4 + 2] & 0xFF) << 8)  |
-			((unsigned char)(buffer[i * 4 + 3] & 0xFF));
-		writeBuffer[i - offset] = wdword;
-	}
-
-	// Begin writing to this address was 0x40000000
-	const DWORD addr = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS];
-	iowrite32(addr, writeBuffer, writeSize, true);
-
-	cout << "Loading file complete!" << endl;
-}
-
-void verify(std::string path)
-{
-	ifstream file;
-	file.open(path, ios::binary | ios::ate);
-
-	const streamsize size = file.tellg();
-	const uint32_t cutoffSize = 64 * 1024; // Cut off the first 64 kiB of data (ELF-header + alignment section)
-
-	if (size < cutoffSize)
-	{
-		cerr << "File size is too small! Needs to be at least 64 kiB..." << endl;
-		return;
-	}
-
-	char buffer[size] = {}; // Create buffer for individual BYTES of binary data
-
-	file.seekg(0, ios::beg);
-
-	if (!file.read(buffer, size))
-	{
-		cerr << "Error loading file '" << path << "'..." << endl;
-		return;
-	}
-
-	const streamsize bytesRead = file.gcount(); // Number of bytes actually read
-	file.close();
-
-	cout << "Verifying File '" << path << "'..." << endl;
-	cout << "File Size: " << dec << size << " B" << endl;
-	cout << "Size Read: " << dec << bytesRead << " B" << endl;
-	// TODO: Check for compatability or something?
-	cout << endl;
-
-	const unsigned int offset = cutoffSize * sizeof(BYTE) / sizeof(DWORD);						  // Divide to convert BYTES to DWORDS
-	const unsigned int readSize = ceil(float(bytesRead) * sizeof(BYTE) / sizeof(DWORD)) - offset; // Divide to convert BYTES to DWORDS and subtract the offset
-	DWORD readBuffer[readSize];
-
-	// Begin writing from this address was 0x40000000; 
-	const DWORD addr = ADDRESSES[ftdi_get_connected_cpu_type()][SDRAM_START_ADDRESS];
-	ioread32(addr, readBuffer, readSize, true);
-
-	cout << "Verifying file... " << flush;
-
-	for (DWORD i = offset; i < readSize; i++) // Start after cutoff
-	{
-		const DWORD wdword = ((unsigned char)(buffer[i * 4]) << 24) |
-			((unsigned char)(buffer[i * 4 + 1] & 0xFF) << 16) |
-			((unsigned char)(buffer[i * 4 + 2] & 0xFF) << 8) |
-			((unsigned char)(buffer[i * 4 + 3] & 0xFF));
-
-		if (readBuffer[i - offset] != wdword)
-		{
-			cerr << "\rVerifying file... ERROR! Byte " << dec << i << " incorrect." << endl;
-			return;
-		}
-		cout << "\rVerifying file... " << dec << (unsigned int)((float)i / (float)(readSize - 1) * 100.0) << "%    " << flush;
-	}
-
-	cout << "\rVerifying file... OK!    " << endl;
-}
 
