@@ -14,7 +14,7 @@
 
 #include "ftdi_device.hpp"
 
-//#include <string>
+#include <string>
 //#include <unordered_map>
 
 #include <stdio.h>
