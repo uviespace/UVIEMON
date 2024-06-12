@@ -14,8 +14,7 @@
 
 #include "ftdi_device.hpp"
 
-#include <string>
-//#include <unordered_map>
+//#include <string>
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -65,7 +64,7 @@ void mem(DWORD startAddr, DWORD length);
 void memh(DWORD startAddr, DWORD length);
 void memb(DWORD startAddr, DWORD length);
 
-void bdump(DWORD startAddr, DWORD length, std::string path);
+void bdump(DWORD startAddr, DWORD length, const char * const path);
 
 void wash(WORD size, DWORD addr, DWORD c);
 //void load(std::string path);

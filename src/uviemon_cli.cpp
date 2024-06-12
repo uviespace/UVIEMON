@@ -243,7 +243,7 @@ void help(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 	printf("  wmemh: \t Write <data#2> 16-bit WORD to a memory <address#1>\n");
 	printf("  wmemb: \t Write <data#2> 8-bit BYTE to a memory <address#1>\n\n");
 
-	printf("  bdump:\t Read <length#2> BYTEs of data from memory starting at an <address#1>, saving the data to a <filePath#1>\n\n");
+	printf("  bdump:\t Read <length#2> BYTEs of data from memory starting at an <address#1>, saving the data to a <filePath#3>\n\n");
 
 	printf("  cpu:\t\t Prints cpu status or enables/disables/activates a specific cpu\n");
 	printf("  inst:\t\t Prints the last <instruction_cnt#1> instruction to stdout\n");
@@ -1212,8 +1212,9 @@ void memb(DWORD startAddr, DWORD length)
 	}*/
 }
 
-void bdump(DWORD startAddr, DWORD length, string path)
+void bdump(DWORD startAddr, DWORD length, const char * const path)
 {
+	FILE *fp;
 	DWORD readBuffer[length];
 	const DWORD charArraySize = length * sizeof(readBuffer[0]);
 	char charArray[charArraySize];
@@ -1233,9 +1234,9 @@ void bdump(DWORD startAddr, DWORD length, string path)
 
 	ofstream file;
 
-	file.open(path, ios::out | ios::binary);
-	file.write(charArray, charArraySize);
-	file.close();
+	fp = fopen(path, "wb");
+	fwrite(charArray, sizeof(char), charArraySize, fp);
+	fclose(fp);
 }
 
 void wash(WORD size, DWORD addr, DWORD c)
