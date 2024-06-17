@@ -8,21 +8,20 @@
 	========================================
 */
 
-#include "uviemon.hpp"
+#include "uviemon.h"
 
-#include "ftdi_device.hpp"
-#include "uviemon_cli.hpp"
+#include "ftdi_device.h"
+#include "uviemon_cli.h"
 
-#include <iostream>			   // cout and cerr
-#include <cstring>			   // Needed for strcmp
-#include <string>			   // string for user input/output
+//#include <iostream>			   // cout and cerr
+#include <string.h>			   // Needed for strcmp
+#include <errno.h>
+//#include <string>			   // string for user input/output
 //#include <sstream>			   // Used in console user input parsing
 #include <readline/readline.h> // Unix only, needs "libreadline-dev" installed to compile!
 #include <readline/history.h>  // Unix only, needs "libreadline-dev" installed to compile!
 #include <stdlib.h>
 #include <stdint.h>
-
-using namespace std; // Makes my life easier
 
 //FTDIDevice device; // Device handle for the FTDI chip
 
@@ -54,12 +53,10 @@ void console()
 
 void showInfo()
 {
-	cout << "Replacement Tool for grmon used in SMILE mission debugging." << endl;
-	cout << "March 2023 and later." << endl;
-	cout << endl;
-	cout << "Source Code: https://github.com/NuclearPhoenixx/uviemon" << endl;
-	cout << endl;
-
+	printf("Replacement Tool for grmon used in SMILE mission debugging.\n");
+	printf("March 2023 and later.\n\n");
+	printf("Source Code: https://github.com/NuclearPhoenixx/uviemon\n\n");
+	
 	FT_STATUS ftStatus;
 	DWORD dwLibraryVer;
 
@@ -71,15 +68,15 @@ void showInfo()
 		unsigned int minorVer = (dwLibraryVer >> 8) & 0xFF;
 		unsigned int buildVer = dwLibraryVer & 0xFF;
 
-		cout << "FTDI library version: " << hex << majorVer << "." << minorVer << "." << buildVer << endl;
+		//cout << "FTDI library version: " << hex << majorVer << "." << minorVer << "." << buildVer << endl;
+		printf("FTDI library version: %x.%x.%x\n", majorVer, minorVer, buildVer);
 	}
 	else
 	{
-		cout << "Error reading library version" << endl;
+		printf("Error reading library version\n");
 	}
 
-	cout << "uviemon version: " << VERSION << endl;
-	cout << endl;
+	printf("uviemon version: %s\n\n", VERSION);
 }
 
 void showHelp()
@@ -95,13 +92,6 @@ void showHelp()
 
 int main(int argc, char *argv[])
 {
-	cout << "\n  ** uviemon v" << VERSION << " **\n"
-		 << endl;
-	cout << "  LEON SPARC V8 Processor debugging monitor using" << endl;
-	cout << "  the FTDI FT2232H chipset for communication.\n"
-	<< endl;
-
-
 	printf("\n  ** uviemon v%s **\n", VERSION);
 	printf("  LEON SPARC V8 Processor debugging monitor using\n");
 	printf("  the FTDI FT2232H chipset for communication.\n\n");

@@ -12,16 +12,33 @@
 	==========================================
 */
 
-#include "ftdi_device.hpp"
+#include "ftdi_device.h"
 
 #include "address_map.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 //#include <iostream>
 #include <unistd.h> // Unix lib for sleep
-#include <cmath>	// For std::ceil in ioread/write32()
+#include <math.h>	// For std::ceil in ioread/write32()
 
 #include "leon3_dsu.h" // Interface to the GR712 debug support unit
+
+const unsigned int CODE_ADDR_COMM = 0x2; // address/command register opcode, 35-bit length
+const DWORD CODE_DATA = 0x3;			 // data register opcode, 33-bit length
+
+const BYTE RW_DWORD = 0b0000010; // 10 for 32-bit DWORD
+const BYTE RW_WORD = 0b0000001;	 // 01 for 16-bit WORD
+const BYTE RW_BYTE = 0b00000000; // 00 for 8-bit BYTE
+
+//const DWORD UART0_STATUS_REG = 0x80000104;
+//const DWORD UART0_CTRL_REG = 0x80000108;
+//const DWORD UART0_FIFO_REG = 0x80000110;
+
+const DWORD UART0_STATUS_REG = 0x4;
+const DWORD UART0_CTRL_REG = 0x8;
+const DWORD UART0_FIFO_REG = 0x10;
+
 
 static ftdi_device device;
 
@@ -1487,7 +1504,12 @@ void ioread32raw(DWORD startAddr, DWORD *data, WORD size)
 	}
 }
 
-void ioread32(DWORD startAddr, DWORD *data, WORD size, bool progress)
+void ioread32_buffer(DWORD startAddr, DWORD *data, WORD size)
+{
+	ioread32_progress(startAddr, data, size, false);
+}
+
+void ioread32_progress(DWORD startAddr, DWORD *data, WORD size, bool progress)
 {
 	if (progress) // Optional terminal progress output
 		printf("Reading data from memory... \n");
@@ -2006,7 +2028,12 @@ void iowrite32raw(DWORD startAddr, DWORD *data, WORD size)
 	}
 }
 
-void iowrite32(DWORD startAddr, DWORD *data, WORD size, bool progress)
+void iowrite32_buffer(DWORD startAddr, DWORD *data, WORD size)
+{
+	iowrite32_progress(startAddr, data, size, false);
+}
+
+void iowrite32_progress(DWORD startAddr, DWORD *data, WORD size, bool progress)
 {
 	if (progress) // Optional terminal progress output
 		printf("Writing data to memory...");

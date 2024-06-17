@@ -43,7 +43,6 @@
 #include <stdlib.h> // malloc, free
 #include "leon3_dsu.h"
 
-#include "ftdi_device.hpp"
 
 #define offset_of(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 
@@ -167,10 +166,10 @@ static uint32_t dsu_get_fpu_reg_addr(uint32_t cpu, uint32_t n)
  * @return content of register
  */
 
-uint32_t dsu_get_global_reg(uint32_t cpu, uint32_t n)
+/*uint32_t dsu_get_global_reg(uint32_t cpu, uint32_t n)
 {
 	return ioread32((uint32_t) dsu_get_global_reg_addr(cpu, n));
-}
+}*/
 
 
 /**
@@ -431,7 +430,7 @@ void dsu_get_input_reg(uint32_t cpu, uint32_t *buffer)
 	uint32_t psr_reg = dsu_get_reg_psr(cpu);
 	uint32_t cwp = psr_reg & 0x1F;
 
-	ioread32(DSU_REG_IN(cpu, cwp), buffer, 8);
+	ioread32_buffer(DSU_REG_IN(cpu, cwp), buffer, 8);
 }
 
 
@@ -447,7 +446,7 @@ void dsu_get_local_reg(uint32_t cpu, uint32_t *buffer)
 	uint32_t psr_reg = dsu_get_reg_psr(cpu);
 	uint32_t cwp = psr_reg & 0x1F;
 
-	ioread32(DSU_REG_LOCAL(cpu, cwp), buffer, 8);
+	ioread32_buffer(DSU_REG_LOCAL(cpu, cwp), buffer, 8);
 }
 
 /**
@@ -462,7 +461,7 @@ void dsu_get_output_reg(uint32_t cpu, uint32_t *buffer)
 	uint32_t psr_reg = dsu_get_reg_psr(cpu);
 	uint32_t cwp = psr_reg & 0x1F;
 
-	ioread32(DSU_REG_OUT(cpu, cwp), buffer, 8);
+	ioread32_buffer(DSU_REG_OUT(cpu, cwp), buffer, 8);
 }
 
 /**
@@ -474,7 +473,7 @@ void dsu_get_output_reg(uint32_t cpu, uint32_t *buffer)
  */
 void dsu_get_global_reg(uint32_t cpu, uint32_t *buffer)
 {
-	ioread32(DSU_REG_GLOBAL(cpu), buffer, 8);
+	ioread32_buffer(DSU_REG_GLOBAL(cpu), buffer, 8);
 }
 
 /**
@@ -486,7 +485,7 @@ void dsu_get_global_reg(uint32_t cpu, uint32_t *buffer)
  */
 void dsu_get_local_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
 {
-	ioread32(DSU_REG_LOCAL(cpu, window), buffer, 8);
+	ioread32_buffer(DSU_REG_LOCAL(cpu, window), buffer, 8);
 }
 
 
@@ -499,7 +498,7 @@ void dsu_get_local_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
  */
 void dsu_get_input_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
 {
-	ioread32(DSU_REG_IN(cpu, window), buffer, 8);
+	ioread32_buffer(DSU_REG_IN(cpu, window), buffer, 8);
 }
 
 /**
@@ -511,7 +510,7 @@ void dsu_get_input_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
  */
 void dsu_get_output_reg_window(uint32_t cpu, uint32_t window, uint32_t *buffer)
 {
-	ioread32(DSU_REG_OUT(cpu, window), buffer, 8);
+	ioread32_buffer(DSU_REG_OUT(cpu, window), buffer, 8);
 }
 
 
@@ -1162,7 +1161,7 @@ void dsu_get_instr_trace_buffer(uint32_t cpu, struct instr_trace_buffer_line *bu
 		read_size = line_count * DSU_INST_TRCE_BUF_LINE_SIZE;
 
 	/* Read size in dwords */
-	ioread32(DSU_BASE(cpu) + DSU_INST_TRCE_BUF_START + offset_start, data, read_size / 4);
+	ioread32_buffer(DSU_BASE(cpu) + DSU_INST_TRCE_BUF_START + offset_start, data, read_size / 4);
 
 	for(uint32_t i = 0; i < read_size / 4; i += 4) {
 		buffer[line_ptr].field[0] = data[i + 0];
@@ -1175,7 +1174,7 @@ void dsu_get_instr_trace_buffer(uint32_t cpu, struct instr_trace_buffer_line *bu
 	/* Read remaining data in case of an overflow in the circular instruction trace buffer  */
 	uint32_t remaining_size = line_count * DSU_INST_TRCE_BUF_LINE_SIZE - read_size;
 	if (remaining_size > 0) {
-		ioread32(DSU_BASE(cpu) + DSU_INST_TRCE_BUF_START, data, remaining_size / 4);
+		ioread32_buffer(DSU_BASE(cpu) + DSU_INST_TRCE_BUF_START, data, remaining_size / 4);
 		
 		for(uint32_t i = 0; i < remaining_size / 4; i += 4) {
 			buffer[line_ptr].field[0] = data[i + 0];

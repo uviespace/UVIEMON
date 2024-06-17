@@ -9,55 +9,51 @@
 	============================================
 */
 
-#include "uviemon_cli.hpp"
+#include "uviemon_cli.h"
+
+#include <stdlib.h>
+#include <math.h>
+#include <unistd.h>   // fork
+#include <fcntl.h>    // open
+#include <sys/wait.h> // wait
+#include <sys/stat.h> // S_IRUSR, S_IWUSR
+#include <errno.h>
 
 #include "address_map.h"
 #include "uviemon_reg.h"
-//#include "uviemon_opcode.h"
-
-#include <iostream> // cout & cerr
-#include <iomanip>	// Used for setfill and setw (cout formatting)
-#include <fstream>	// For loading a file in load()
-#include <cmath>	// For std::ceil in load()
-#include <stdlib.h>
-#include <unistd.h> // fork
-#include <fcntl.h>  // open
-#include <sys/wait.h> // wait
-
 #include "leon3_dsu.h"
+//#include "uviemon_opcode.h"
 
 static const char *opcode_filename = "/tmp/opcode.bin";
 static const char *objdump_output = "/tmp/obj_dump_out";
 static const char *obj_dump_cmd[] = { "sparc-elf-objdump", "-b", "binary", "-m", "sparc", "--adjust-vma=0x40000000", "-D", "/tmp/opcode.bin", NULL };
 
-using namespace std;
-
 //static int command_count;
 
 static const command commands[] =  {
-	{ "help", &help },
-	{ "scan", &scan },
-	{ "reset", &reset },
+	{ "help", &cli_help },
+	{ "scan", &cli_scan },
+	{ "reset", &cli_reset },
 	
-	{ "mem", &memx },
-    { "memh", &memx },
-	{ "memb", &memx },
+	{ "mem", &cli_memx },
+    { "memh", &cli_memx },
+	{ "memb", &cli_memx },
 	
-	{ "wmem", &wmemx },
-	{ "wmemh", &wmemx },
-	{ "wmemb", &wmemx },
+	{ "wmem", &cli_wmemx },
+	{ "wmemh", &cli_wmemx },
+	{ "wmemb", &cli_wmemx },
 
-	{ "bdump", &bdump },
+	{ "bdump", &cli_bdump },
 
-	{ "inst", &inst },
-	{ "reg", &reg },
-	{ "cpu", &cpu },
+	{ "inst", &cli_inst },
+	{ "reg", &cli_reg },
+	{ "cpu", &cli_cpu },
 
-	{ "wash", &washc },
+	{ "wash", &cli_washc },
 
-	{ "load", &load },
-	{ "verify", &verify },
-	{ "run", &run }
+	{ "load", &cli_load },
+	{ "verify", &cli_verify },
+	{ "run", &cli_run }
 }; 
 
 
@@ -226,7 +222,7 @@ static DWORD parse_parameter(char *param)
 }
 
 
-void help(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_help(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	printf("Usage:\n");
 	printf("  command <param#1> <param#2> ... <param#X>\n\n");
@@ -257,7 +253,7 @@ void help(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 	printf("  exit: \t Exit uviemon\n");
 }
 
-void scan(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_scan(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	/* Grab IR length, it's always (needs to be) 6 so I could skip this technically */
 	BYTE irl = scan_IR_length();
@@ -266,7 +262,7 @@ void scan(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 	scan_instruction_codes(irl);
 }
 
-void run(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_run(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	BYTE tt = runCPU(ftdi_get_active_cpu()); // Execute on CPU Core 1
 
@@ -301,14 +297,14 @@ static const char * const get_tt_error_desc(uint32_t error_code)
 	return "Error code not found";
 }
 
-void reset(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_reset(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	printf("Resetting...");
 	reset(0);
 	printf(" Done!\n");
 }
 
-void load(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_load(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	FILE *fp;
 	const uint32_t cutoff_size = 64 * 1024;
@@ -363,7 +359,7 @@ void load(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 						| byte_buffer[i * 4 + 3];
 		}
 		
-		iowrite32(write_address, buffer, current_read / 4, false);
+		iowrite32_buffer(write_address, buffer, current_read / 4);
 		
 		bytes_read += current_read;
 		write_address += current_read;
@@ -452,7 +448,7 @@ void load(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 	cout << "Loading file complete!" << endl;
 }*/
 
-void bdump(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_bdump(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	DWORD param_1, param_2;
 	
@@ -474,7 +470,7 @@ void bdump(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 	bdump(param_1, param_2, params[2]);
 }
 
-void verify(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_verify(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	const uint64_t cutoff_size = 64 * 1024;
 
@@ -523,7 +519,7 @@ void verify(const char *command, int param_count, char params[MAX_PARAMETERS][MA
 
 	while(!feof(fp)) {
 		current_read = fread(byte_buffer, sizeof(uint8_t), 4096, fp);
-		ioread32(read_address, buffer, current_read / 4, false);
+		ioread32_buffer(read_address, buffer, current_read / 4);
 
 		for (uint64_t i = 0; i < current_read / 4; i++) {
 			buffer_cmp = byte_buffer[i * 4] << 24
@@ -613,7 +609,7 @@ void verify(const char *command, int param_count, char params[MAX_PARAMETERS][MA
 	cout << "\rVerifying file... OK!    " << endl;
 }*/
 
-void washc(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_washc(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	WORD size = 16;
 	// was 0x40000000
@@ -644,7 +640,7 @@ void washc(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 }
 
 
-void memx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_memx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	DWORD param_1, param_2 = 0;
 
@@ -676,7 +672,7 @@ void memx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 	}
 }
 
-void wmemx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_wmemx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	DWORD param_1, param_2;
 	
@@ -706,7 +702,7 @@ void wmemx(const char *command, int param_count, char params[MAX_PARAMETERS][MAX
 	}
 }
 
-void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	uint32_t instr_count = 11;
 	uint32_t cpu = ftdi_get_active_cpu();
@@ -724,9 +720,8 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 	}
 
 	
-	struct instr_trace_buffer_line *buffer = (instr_trace_buffer_line*) malloc(sizeof(instr_trace_buffer_line) * instr_count * 2);
+	struct instr_trace_buffer_line *buffer = malloc(sizeof(struct instr_trace_buffer_line) * instr_count * 2);
 
-	/* TODO: manage active cpu */
 	dsu_get_instr_trace_buffer(cpu, buffer, instr_count * 2, 0);
 
 
@@ -798,7 +793,7 @@ void inst(const char* command, int param_count, char params[MAX_PARAMETERS][MAX_
 	free(buffer);
 }
 
-void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_reg(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	uint32_t cpu = ftdi_get_active_cpu();
 	uint32_t input, reg_value;
@@ -858,7 +853,7 @@ void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 					return;
 				}
 
-				((register_func_standard*)func_handler)->set_value(desc, input);
+				((struct register_func_standard*)func_handler)->set_value(desc, input);
 				break;
 
 			case float_reg:
@@ -869,7 +864,7 @@ void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 					return;
 				}
 
-				((register_func_float*)func_handler)->set_value(desc, float_input);
+				((struct register_func_float*)func_handler)->set_value(desc, float_input);
 				break;
 
 			case double_reg:
@@ -880,7 +875,7 @@ void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 					return;
 				}
 
-				((register_func_double*)func_handler)->set_value(desc, double_input);
+				((struct register_func_double*)func_handler)->set_value(desc, double_input);
 				break;
 				
 			default:
@@ -890,17 +885,17 @@ void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 
 		switch(desc.type) {
 		case standard_reg:
-			reg_value = ((register_func_standard*)func_handler)->get_value(desc);
+			reg_value = ((struct register_func_standard*)func_handler)->get_value(desc);
 			printf("   %3s = %d (0x%08x)\n", params[0], reg_value, reg_value);
 			break;
 
 		case float_reg:
-			reg_value_float = ((register_func_float*)func_handler)->get_value(desc);
+			reg_value_float = ((struct register_func_float*)func_handler)->get_value(desc);
 			printf("   %3s = %f (0x%08x)\n", params[0], reg_value_float.f, reg_value_float.u);
 			break;
 
 		case double_reg:
-			reg_value_double = ((register_func_double*)func_handler)->get_value(desc);
+			reg_value_double = ((struct register_func_double*)func_handler)->get_value(desc);
 			printf("   %3s = %lf (0x%016lx)\n", params[0], reg_value_double.d, reg_value_double.u);
 			break;
 
@@ -913,7 +908,7 @@ void reg (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_
 }
 
 
-void cpu (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
+void cli_cpu(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
     /* TODO: refactor to put this information in ftdi device */
 	uint32_t cpu_count = ftdi_get_connected_cpu_type() == LEON3 ? 2 : 4;
@@ -1078,7 +1073,7 @@ void mem(DWORD startAddr, DWORD length)
 	WORD arrayIndex = 0;
 	char string_output[4 * showWidth + 1];
 
-	ioread32(startAddr, arr, length, length > 256); // Use sequential reads
+	ioread32_progress(startAddr, arr, length, length > 256); // Use sequential reads
 	
 	for (DWORD i = 0; i < length; i++) {
 		if (i % showWidth == 0) {
@@ -1221,7 +1216,7 @@ void bdump(DWORD startAddr, DWORD length, const char * const path)
 
 	DWORD dwordLength = ceil(length / sizeof(DWORD)); // Convert byte length to DWORD length
 
-	ioread32(startAddr, readBuffer, dwordLength, true);
+	ioread32_progress(startAddr, readBuffer, dwordLength, true);
 
 	for (DWORD i = 0; i < dwordLength; i++)
 	{
@@ -1231,8 +1226,6 @@ void bdump(DWORD startAddr, DWORD length, const char * const path)
 		charArray[i * 4 + 2] = ((char)(temp >> 8) & 0xFF);
 		charArray[i * 4 + 3] = ((char)(temp)&0xFF);
 	}
-
-	ofstream file;
 
 	fp = fopen(path, "wb");
 	fwrite(charArray, sizeof(char), charArraySize, fp);
@@ -1248,7 +1241,7 @@ void wash(WORD size, DWORD addr, DWORD c)
 
 	printf("Writing %#x to %d DWORD(s) in memory, starting at %#08x ...\n", c, size, addr);
 
-	iowrite32(addr, data, size, true);
+	iowrite32_progress(addr, data, size, true);
 
 	printf("Wash of %d DWORD(s) complete!\n", size);
 }

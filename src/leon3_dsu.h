@@ -22,7 +22,7 @@
 #include <stdint.h>
 
 #include "address_map.h"
-#include "ftdi_device.hpp"
+#include "ftdi_device.h"
 
 /*
  * helper macro to fill unused 4-byte slots with "unusedXX" variables
@@ -187,17 +187,17 @@ struct instr_trace_buffer_line {
 
 	union {
 		struct {
-			uint32_t unused		  :1;
+			uint32_t unused		      :1;
 			uint32_t multi_cycle_inst :1;
-			uint32_t timetag	  :30;
+			uint32_t timetag	      :30;
 			uint32_t load_store_param :32;
 			/* program_cntr is still a 32bit number,
 			 * but the two lsb are always 0 and thus used for something else
 			 */
 			uint32_t program_cntr	  :30; 
-			uint32_t instr_trap	  :1;
+			uint32_t instr_trap	      :1;
 			uint32_t proc_error_mode  :1;
-			uint32_t opcode		  :32;
+			uint32_t opcode		      :32;
 		};
 		uint32_t field[4];
 	};
@@ -277,7 +277,7 @@ void dsu_set_force_debug_on_watchpoint(uint32_t cpu);
 uint32_t dsu_get_cpu_in_debug_mode(uint32_t cpu);
 uint32_t dsu_get_cpu_in_halt_mode(uint32_t cpu);
 uint32_t dsu_get_cpu_in_error_mode(uint32_t cpu);
-uint32_t dsu_get_global_reg(uint32_t cpu, uint32_t n);
+//uint32_t dsu_get_global_reg(uint32_t cpu, uint32_t n);
 uint32_t dsu_get_dsu_ctrl(uint32_t cpu);
 uint32_t dsu_get_reg_psr(uint32_t cpu);
 uint32_t dsu_get_reg_tbr(uint32_t cpu);
@@ -296,7 +296,7 @@ void dsu_get_output_reg_window(uint32_t cpu, uint32_t cwp, uint32_t *buffer);
 uint32_t dsu_get_local_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num);
 uint32_t dsu_get_input_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num);
 uint32_t dsu_get_output_reg_single(uint32_t cpu, uint32_t cwp, uint32_t reg_num);
-uint32_t dsu_get_global_reg_single(uint32_t cpue, uint32_t cwp, uint32_t reg_num);
+uint32_t dsu_get_global_reg_single(uint32_t cpu, uint32_t reg_num);
 
 union float_value dsu_get_float_reg(uint32_t cpu, uint32_t reg_num);
 union double_value dsu_get_double_reg(uint32_t cpu, uint32_t reg_num);

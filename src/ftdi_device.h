@@ -20,21 +20,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-const unsigned int CODE_ADDR_COMM = 0x2; // address/command register opcode, 35-bit length
-const DWORD CODE_DATA = 0x3;			 // data register opcode, 33-bit length
-
-const BYTE RW_DWORD = 0b0000010; // 10 for 32-bit DWORD
-const BYTE RW_WORD = 0b0000001;	 // 01 for 16-bit WORD
-const BYTE RW_BYTE = 0b00000000; // 00 for 8-bit BYTE
-
-//const DWORD UART0_STATUS_REG = 0x80000104;
-//const DWORD UART0_CTRL_REG = 0x80000108;
-//const DWORD UART0_FIFO_REG = 0x80000110;
-
-const DWORD UART0_STATUS_REG = 0x4;
-const DWORD UART0_CTRL_REG = 0x8;
-const DWORD UART0_FIFO_REG = 0x10;
-
+extern const unsigned int CODE_ADDR_COMM;
+extern const DWORD CODE_DATA;
 
 typedef struct {
 	FT_HANDLE ft_handle;
@@ -89,8 +76,11 @@ void iowrite32(DWORD addr, DWORD data);
 // Sequential RW w/ optional progress output
 void ioread32raw(DWORD startAddr, DWORD *data, WORD size); // Extremely slow, it's actually faster to write data...
 void iowrite32raw(DWORD startAddr, DWORD *data, WORD size);
-void ioread32(DWORD startAddr, DWORD *data, WORD size, bool progress = false);
-void iowrite32(DWORD startAddr, DWORD *data, WORD size, bool progress = false);
+
+void ioread32_buffer(DWORD startAddr, DWORD *data, WORD size);
+void iowrite32_buffer(DWORD startAddr, DWORD *data, WORD size);
+void ioread32_progress(DWORD startAddr, DWORD *data, WORD size, bool progress);
+void iowrite32_progress(DWORD startAddr, DWORD *data, WORD size, bool progress);
 
 
 void pr_err(const char * const output);

@@ -85,7 +85,7 @@ struct register_desc parse_register(const char * const reg, uint32_t cpu)
 	uint32_t param_length = strlen(reg);
 
 	/* start name is invalid in case parsing doesn't work */
-	struct register_desc desc { "inv", standard_reg, cpu, 0, dsu_get_reg_psr(cpu) & 0x1F  };
+	struct register_desc desc = { "inv", standard_reg, cpu, 0, dsu_get_reg_psr(cpu) & 0x1F  };
 
 	/* Special purpose registers */
 	if (strcmp(reg, "psr") == 0) {
@@ -233,28 +233,28 @@ struct register_func *get_register_functions(const struct register_desc desc)
 	case standard_reg:
 		for (uint32_t i = 1; i < (sizeof(function_handler) / sizeof(function_handler[0])); i++) {
 			if (strcmp(desc.name, function_handler[i].name) == 0)
-				return (register_func*)&function_handler[i];
+				return (struct register_func*)&function_handler[i];
 		}
 
-		return (register_func*)&function_handler[0];
+		return (struct register_func*)&function_handler[0];
 
 		break;
 
 	case float_reg:
-		return (register_func*)&function_handler_float;
+		return (struct register_func*)&function_handler_float;
 		break;
 
 	case double_reg:
-		return (register_func*)&function_handler_double;
+		return (struct register_func*)&function_handler_double;
 		break;
 
 	case none:
-		return (register_func*)&function_handler[0];
+		return (struct register_func*)&function_handler[0];
 		break;
 	}
 
 	/* should never reach here, but removes warning */
-	return (register_func*)&function_handler[0];
+	return (struct register_func*)&function_handler[0];
 }
 
 
@@ -423,7 +423,7 @@ static void set_reg_fp(struct register_desc desc, uint32_t value)
 /* Window register */
 static uint32_t get_reg_global(struct register_desc desc)
 {
-	return dsu_get_global_reg(desc.cpu, desc.reg_num);  
+	return dsu_get_global_reg_single(desc.cpu, desc.reg_num);  
 }
 
 static void set_reg_global(struct register_desc desc, uint32_t value)

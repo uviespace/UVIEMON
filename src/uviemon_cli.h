@@ -12,9 +12,7 @@
 #ifndef UVIEMON_CLI_HPP
 #define UVIEMON_CLI_HPP
 
-#include "ftdi_device.hpp"
-
-//#include <string>
+#include "ftdi_device.h"
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -42,19 +40,19 @@ int parse_input(char *input);
 void print_help_text();
 
 /* Command functions  */
-void help  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void scan  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void memx  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void wmemx (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void run   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void reset (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void load  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void verify(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void bdump (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void washc (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void inst  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void reg   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
-void cpu   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_help  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_scan  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_memx  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_wmemx (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_run   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_reset (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_load  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_verify(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_bdump (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_washc (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_inst  (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_reg   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
+void cli_cpu   (const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH]);
 
 void wmem(DWORD addr, DWORD data);
 void wmemh(DWORD addr, WORD data);
