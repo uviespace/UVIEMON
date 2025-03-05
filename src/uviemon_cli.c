@@ -36,7 +36,7 @@ static const command commands[] =  {
 	{ "reset", &cli_reset },
 	
 	{ "mem", &cli_memx },
-    { "memh", &cli_memx },
+	{ "memh", &cli_memx },
 	{ "memb", &cli_memx },
 	
 	{ "wmem", &cli_wmemx },
