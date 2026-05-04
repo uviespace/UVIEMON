@@ -9,24 +9,46 @@
 */
 
 #include "uviemon.h"
+#include "uviemon_io.h"
 
 #include "ftdi_device.h"
 #include "uviemon_cli.h"
 
-#include <string.h>			   // Needed for strcmp
+#include <string.h>			   // Needed for strcmp, strlcpy
+#include <bsd/string.h>
 #include <errno.h>
-//#include <string>			   // string for user input/output
 #include <readline/readline.h> // Unix only, needs "libreadline-dev" installed to compile!
 #include <readline/history.h>  // Unix only, needs "libreadline-dev" installed to compile!
 #include <stdlib.h>
 #include <stdint.h>
 
-//FTDIDevice device; // Device handle for the FTDI chip
+// FTDIDevice device; // Device handle for the FTDI chip
+
+static char autostart_file_buffer[512];
 
 void console()
 {
 	char *raw_input = NULL;
 	int parse_result = 0;
+
+	if (*autostart_file_buffer) {
+		FILE *autostart_file = fopen(autostart_file_buffer, "r");
+		char buffer[512];
+		int read_length;
+		
+
+		if (autostart_file) {
+			while(uvie_readline(autostart_file, buffer, sizeof(buffer), &read_length)) {
+				parse_result = parse_input(buffer);
+
+				if (parse_result == -1) {
+					/* The autostart file contained an "exit" command, so we will exit */
+					write_history(".uviemon_history"); // Save the history file
+					return;
+				}
+			}
+		}
+	}
 	
 	read_history(".uviemon_history"); // Load the history file
 	rl_bind_key('\t', rl_complete);	  // Tab completion for readline
@@ -85,7 +107,8 @@ void showHelp()
 	printf("\t -info: \t Version numbers and driver info\n");
 	printf("\t -list: \t List all available FTDI devices\n");
 	printf("\t -cpu_tye <num>: \t 0 for LEON 3 and 1 for LEON4 autodetection used of omitted \n");
-	printf("\t -jtag <num>: \t Open console with jtag device\n\n");
+    printf("\t -jtag <num>: \t Open console with jtag device\n\n");
+    printf("\t -autostart <file>: \t Opens file and runs each command after establishing a connection\n");
 }
 
 int main(int argc, char *argv[])
@@ -135,7 +158,13 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 
+        } else if (strcmp(argv[i], "-autostart") == 0) {
+			if ((i + 1) >= argc) {
+                fprintf(stderr, "-autostart require a file with commands");
+                return 1;
+			}
 			
+			strlcpy(autostart_file_buffer, argv[++i], sizeof(autostart_file_buffer));
 		} else {
 			fprintf(stderr, "Uknown command '%s'\n\n", argv[i]);
 			showHelp();

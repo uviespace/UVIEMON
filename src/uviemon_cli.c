@@ -22,6 +22,7 @@
 #include "address_map.h"
 #include "uviemon_reg.h"
 #include "leon3_dsu.h"
+#include "uviemon_io.h"
 //#include "uviemon_opcode.h"
 
 static const char *opcode_filename = "/tmp/opcode.bin";
@@ -60,7 +61,7 @@ static const command commands[] =  {
 static DWORD parse_parameter(char *param);
 
 static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address);
-static int readline(FILE *file, char *buffer, int buffer_length, int *read_length);
+//static int readline(FILE *file, char *buffer, int buffer_length, int *read_length);
 static void print_register_error_msg(const char * const reg);
 static void print_value_error_msg(const char * const value);
 static const char * const get_tt_error_desc(uint32_t error_code);
@@ -961,21 +962,21 @@ static void print_value_error_msg(const char * const value)
 	printf("Could not parse value: %s\n", value);
 }
 
-static int readline(FILE *file, char *buffer, int buffer_length, int *read_length)
-{
-	int i = 0;
-	while(!feof(file) && i < (buffer_length - 1)) {
-		fread(&buffer[i++], sizeof(char), 1, file);
-		if (buffer[i-1] == '\n') {
-			buffer[i-1] = '\0';
-			*read_length = i - 1;
-			return 1;
-		}
-	}
-	buffer[i] = '\0';
-	*read_length = i;
-	return 0;
-}
+/* static int readline(FILE *file, char *buffer, int buffer_length, int *read_length) */
+/* { */
+/* 	int i = 0; */
+/* 	while(!feof(file) && i < (buffer_length - 1)) { */
+/* 		fread(&buffer[i++], sizeof(char), 1, file); */
+/* 		if (buffer[i-1] == '\n') { */
+/* 			buffer[i-1] = '\0'; */
+/* 			*read_length = i - 1; */
+/* 			return 1; */
+/* 		} */
+/* 	} */
+/* 	buffer[i] = '\0'; */
+/* 	*read_length = i; */
+/* 	return 0; */
+/* } */
 
 static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address)
 {
@@ -1037,10 +1038,10 @@ static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address)
 	stdout_file = fopen(objdump_output, "r");
 
 	while(lines < 7) {
-		if (readline(stdout_file, stdout_buffer, 256, &read_length))
+		if (uvie_readline(stdout_file, stdout_buffer, 256, &read_length))
 			lines++;
 	}
-	readline(stdout_file, stdout_buffer, 256, &read_length);
+	uvie_readline(stdout_file, stdout_buffer, 256, &read_length);
 	if (read_length == 0)
 		sprintf(buffer, "unknown error");
 
