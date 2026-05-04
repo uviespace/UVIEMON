@@ -26,7 +26,7 @@
 
 static const char *opcode_filename = "/tmp/opcode.bin";
 static const char *objdump_output = "/tmp/obj_dump_out";
-static const char *obj_dump_cmd[] = { "sparc-elf-objdump", "-b", "binary", "-m", "sparc", "--adjust-vma=0x40000000", "-D", "/tmp/opcode.bin", NULL };
+static const char *obj_dump_cmd[] = { "sparc-gaisler-elf-objdump", "-b", "binary", "-m", "sparc", "--adjust-vma=0x40000000", "-D", "/tmp/opcode.bin", NULL };
 
 //static int command_count;
 
@@ -991,7 +991,8 @@ static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address)
 
 	/* Write opcode to file for object dump  */
 	FILE *opcode_file;
-	FILE *stdout_file;
+    FILE *stdout_file;
+    struct stat file_status;
 
 	opcode_file = fopen(opcode_filename, "w");
 	fwrite(&opcode, sizeof(uint32_t), 1, opcode_file);
@@ -1021,7 +1022,18 @@ static void parse_opcode(char *buffer, uint32_t opcode, uint32_t address)
 
 	/* wait for objdump and read stdout that was piped into a file */
 	wait(0);
-	free(command);
+    free(command);
+
+    if (stat(objdump_output, &file_status) < 0) {
+		fprintf(stderr, "Cannot stat file. Objdump likely did not run\n");
+		return;
+    }
+
+    if (file_status.st_size == 0) {
+		fprintf(stderr, "Objdump output file empty. Error during execution\n");
+		return;
+    }
+    
 	stdout_file = fopen(objdump_output, "r");
 
 	while(lines < 7) {

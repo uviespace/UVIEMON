@@ -13,11 +13,9 @@
 #include "ftdi_device.h"
 #include "uviemon_cli.h"
 
-//#include <iostream>			   // cout and cerr
 #include <string.h>			   // Needed for strcmp
 #include <errno.h>
 //#include <string>			   // string for user input/output
-//#include <sstream>			   // Used in console user input parsing
 #include <readline/readline.h> // Unix only, needs "libreadline-dev" installed to compile!
 #include <readline/history.h>  // Unix only, needs "libreadline-dev" installed to compile!
 #include <stdlib.h>
