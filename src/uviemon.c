@@ -29,6 +29,7 @@ static char autostart_file_buffer[512];
 void console()
 {
 	char *raw_input = NULL;
+	char *single_cmd;
 	int parse_result = 0;
 
 	if (*autostart_file_buffer) {
@@ -64,7 +65,16 @@ void console()
 		if (raw_input && *raw_input)
 			add_history(raw_input);
 
-		parse_result = parse_input(raw_input);
+		single_cmd = strtok(raw_input, ";");
+		while (single_cmd) {
+			parse_result = parse_input(single_cmd);
+			if (parse_result == -1)
+				break;
+
+			single_cmd = strtok(NULL, ";");
+		}
+
+		//parse_result = parse_input(raw_input);
 		free(raw_input);
 	}
 	   
