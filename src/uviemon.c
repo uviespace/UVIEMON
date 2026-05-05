@@ -30,6 +30,7 @@ void console()
 {
 	char *raw_input = NULL;
 	char *single_cmd;
+	char *save_ptr = NULL;
 	int parse_result = 0;
 
 	if (*autostart_file_buffer) {
@@ -65,13 +66,13 @@ void console()
 		if (raw_input && *raw_input)
 			add_history(raw_input);
 
-		single_cmd = strtok(raw_input, ";");
+		single_cmd = strtok_r(raw_input, ";", &save_ptr);
 		while (single_cmd) {
 			parse_result = parse_input(single_cmd);
 			if (parse_result == -1)
 				break;
 
-			single_cmd = strtok(NULL, ";");
+			single_cmd = strtok_r(NULL, ";", &save_ptr);
 		}
 
 		//parse_result = parse_input(raw_input);
