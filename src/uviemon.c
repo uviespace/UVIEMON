@@ -86,7 +86,7 @@ void showInfo()
 {
 	printf("Replacement Tool for grmon used in SMILE mission debugging.\n");
 	printf("March 2023 and later.\n\n");
-	printf("Source Code: https://github.com/NuclearPhoenixx/uviemon\n\n");
+	printf("Source Code: https://github.com/uviespace/UVIEMON\n\n");
 	
 	FT_STATUS ftStatus;
 	DWORD dwLibraryVer;

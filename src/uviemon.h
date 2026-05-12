@@ -19,7 +19,7 @@
 
 
 
-#define VERSION "1.0.0" // Define some version number
+#define VERSION "1.1.0" // Define some version number
 
 /*
 	Define a new object that will be used to connect to the FTDI chip and do all the JTAG comms

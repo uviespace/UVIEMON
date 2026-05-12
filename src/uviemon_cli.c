@@ -265,7 +265,7 @@ void cli_scan(const char *command, int param_count, char params[MAX_PARAMETERS][
 
 void cli_run(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
-	BYTE tt = runCPU(ftdi_get_active_cpu()); // Execute on CPU Core 1
+	BYTE tt = runCPU(ftdi_get_active_cpu()); // Execute on active CPU core
 
 	if (tt < 0x80) // Hardware traps
 	{
@@ -301,7 +301,7 @@ static const char * const get_tt_error_desc(uint32_t error_code)
 void cli_reset(const char *command, int param_count, char params[MAX_PARAMETERS][MAX_PARAM_LENGTH])
 {
 	printf("Resetting...");
-	reset(0);
+	reset(ftdi_get_active_cpu());
 	printf(" Done!\n");
 }
 
